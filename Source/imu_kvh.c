@@ -42,6 +42,7 @@ uint8_t kvh_msg_buf[KVH_MSG_SIZE+2];
 
 void Decode_KVH_Datagram()
 {
+    // fill in and convert to NOVATEL_RAW FORMAT
 
 }
 
