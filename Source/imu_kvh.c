@@ -5,7 +5,6 @@
  * Version 1.00 - Mar. 2026 - Initial development of KVH IMU support.
  */
 #include "common.h"
-#include "imu_kvh.h"
 
 char* kvh_test_cmd = "=BIT\n";
 char* kvh_enter_config_cmd = "=CONFIG,1\n";

@@ -20,7 +20,6 @@
  */
 
 #include "common.h"
-#include "imu_stim.h"
 
 #define DEBUG_STIM
 

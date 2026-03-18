@@ -32,9 +32,8 @@
 * Version 4.00 - Mar. 2026 - Added support for KVH IMU.
 ********************************************************************************/
 #include "common.h"
-#include "cmdprocessor.h"
 
-/* __TIMESTAMP__ is a gcc defined, fix length string of the type: Thu Jun 02 19:13:23 2022 */
+/* __TIMESTAMP__ is a gcc defined, fix length string of the type: Thu Jun 02 19:13: 2022 */
 
 const char VersionString[] = "G2-SC200 - FSAS Firmware Version 4.0 - " __TIMESTAMP__;
 
@@ -303,7 +302,7 @@ void HBAction(uint32_t cnt)
 uint8_t _novatel_buffer[FLEX_RING_BUF_MEM(LARGEST_NOVATEL_MESSAGE, NUMBER_OF_GNSS_RECORDS)];
 RDBUF_HANDLE HandleGNSSRecords = NULL;
 
-inline void CreateNovatelBuffer()
+static inline void CreateNovatelBuffer()
 {
 	HandleGNSSRecords = CreateFlexRingBuffer(_novatel_buffer, sizeof(_novatel_buffer));
 }
@@ -322,7 +321,7 @@ void Purge_GNSS_Buffer()
 uint8_t _imu_buffer[FLEX_RING_BUF_MEM(IMU_RECORD_SIZE, IMU_RECORD_STORE_COUNT)];
 RDBUF_HANDLE HandleImuRecords  = NULL;
 
-inline void CreateImudBuffer()
+static inline void CreateImudBuffer()
 {
 	HandleImuRecords = CreateFlexRingBuffer( _imu_buffer, sizeof(_imu_buffer) );
 }
@@ -348,7 +347,7 @@ typedef struct
 DBUF_HANDLE HandleReportRecords = NULL;
 uint8_t _reoprt_buffer[RING_BUFFER_SPACE( sizeof(repbuf_t), NUMBER_OF_REPORTS)];
 
-inline void CreateReportBuffer()
+static inline void CreateReportBuffer()
 {
 	HandleReportRecords = CreateRingBuffer(sizeof(repbuf_t), NUMBER_OF_REPORTS, _reoprt_buffer, sizeof(_reoprt_buffer));
 }

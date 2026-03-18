@@ -6,7 +6,6 @@
  */
 
 #include <common.h>
-#include <stdio.h>
 
 bool RTC_Initialized = false;
 

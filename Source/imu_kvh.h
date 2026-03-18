@@ -9,9 +9,6 @@
 #define KVH_H
  
 #include "common.h"
-#include "Novatel.h"
-#include "cmdprocessor.h"
-#include "Uarts.h"
 
 #pragma pack(push,1)
 

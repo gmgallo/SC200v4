@@ -10,7 +10,6 @@
 
 #include "globaldefs.h"
 
-
 /*-------------------------------------------------------------------- Common data structures  */
 typedef void* DBUF_HANDLE;		 // ring buffer handle
 

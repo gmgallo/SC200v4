@@ -7,9 +7,6 @@
  *      Author: Guillermo
  */
 #include "common.h"
-#include "gpio.h"
-#include "cmdprocessor.h"
-
 
 /*--------------------------------------------------------------- PORTS*/
 typedef struct
@@ -364,7 +361,7 @@ int find_binaryParam(char* token)
 }
 
 /*------------------------------------------------------------------- Find keyword Constant **/
-int find_KeywordConstant ( const keyword_t* array, size_t size, const char* word)
+int find_KeywordConstant ( const tkeywrd_t* array, size_t size, const char* word)
 {
 	for (int i=0; i < size;i++)
 	{
@@ -376,7 +373,7 @@ int find_KeywordConstant ( const keyword_t* array, size_t size, const char* word
 }
 
 
-const char* find_KeywordName ( const keyword_t* list, size_t size, const int key)
+const char* find_KeywordName ( const tkeywrd_t* list, size_t size, const int key)
 {
 	for(int i = 0; i < size; i++ )
 	{
@@ -389,7 +386,7 @@ const char* find_KeywordName ( const keyword_t* list, size_t size, const int key
 
 /*----------------------------------------------------------------- IMU Commands arguments */
 
-const keyword_t ImuFormatDictionary[] =
+const tkeywrd_t ImuFormatDictionary[] =
 {
 	{"FSAS", fmtFSAS_NATIVE},		// used for debugging only
 	{"NRAW", fmtNOVATEL_RAW},		// default to be consistent with other logs form OEM7700 receiver
@@ -399,7 +396,7 @@ const keyword_t ImuFormatDictionary[] =
 };
 
 
-const keyword_t ImuTypeList[] =
+const tkeywrd_t ImuTypeList[] =
 {
 	{ "FSAS", IMUType_FSAS },
 	{ "STIM", IMUType_STIM300 },
@@ -407,7 +404,7 @@ const keyword_t ImuTypeList[] =
 };
 
 
-const keyword_t ImuComTargetList[] =
+const tkeywrd_t ImuComTargetList[] =
 {
 	{ "PSOC", Target_PSOC },
 	{ "NOVATEL", Target_NovAtel },

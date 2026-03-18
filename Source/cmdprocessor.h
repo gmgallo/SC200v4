@@ -5,8 +5,8 @@
  *      Author: Guillermo
  */
 
-#ifndef SOURCE_CMDPROCESSOR_H_
-#define SOURCE_CMDPROCESSOR_H_
+#ifndef CMDPROCESSOR_H_
+#define CMDPROCESSOR_H_
 
 #include "common.h"
 
@@ -30,20 +30,10 @@ int PrintStatusLong(char* buffer, size_t size);
 char* ScanCommandLine(uint8_t *buf, int cnt, _ports_t sender );
 char* ProcessCommand(char* buffer, _ports_t sender);
 
-
-
 /*------------------------------------keyword search */
-typedef struct
-{
-	const char* name;
-	int			key;
-} keyword_t;
+int find_KeywordConstant ( const tkeywrd_t* , size_t , const char* );
+const char* find_KeywordName ( const tkeywrd_t*, size_t, const int );
 
 
-int find_KeywordConstant ( const keyword_t* , size_t , const char* );
-const char* find_KeywordName ( const keyword_t*, size_t, const int );
-
-
-
-#endif /* SOURCE_CMDPROCESSOR_H_ */
+#endif /* CMDPROCESSOR_H_ */
 

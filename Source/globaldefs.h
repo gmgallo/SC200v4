@@ -11,7 +11,7 @@
 #ifndef GLOBALDEFS_H_
 #define GLOBALDEFS_H_
 
-#define SC_RESULT_OK	(0)
+#define SC_RESULT_OK (0)
 
 /*-------------------------------- Common defs and inlines */
 #define IS_LINE_TERMINATOR(c)	((c) == '\r' || (c) == '\n')
@@ -23,7 +23,31 @@
 #define ARRAY_SIZE(a)	 (sizeof(a)/sizeof(a[0]))
 #endif
 
-// ----------------------------------------------- Defines moved to GPIO.H
+
+typedef struct _tag_keyword
+{
+	const char* name;
+	int			key;
+} tkeywrd_t;
+
+
+/*----------------------------------------------------------------------------- numeric converters */
+inline bool isdec(char c)	{ return (c >='0' && c <= '9'); }
+inline bool ishex(char c) 	{ return (isdec(c) || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f')); }
+inline int dec2bin(char c)  { return c - '0'; }
+inline int hex2bin(char c)  { return ((c >= 'a') ? c - 'W' : ((c >= 'A') ? c - '7' : c - '0')); }
+
+#ifdef __GNUC__
+	#if __GNUC_PREREQ (4, 3)
+	static __inline unsigned short _bswap16(unsigned short __bsx) { return __builtin_bswap16 (__bsx);  }
+	static __inline unsigned int   _bswap32(unsigned int __bsx)   { return __builtin_bswap32 (__bsx);  }
+	#elif
+	inline uint16_t ToEndian16(uint16_t a) { return (a >> 8) | (a << 8); }
+	inline uint32_t ToEndian32(uint32_t a) { return (a >> 24) | ((a & 0xff0000) >> 8) | ((a & 0xff00)<<8) | ((a & 0xff)<<24); }
+	#endif
+#endif
+
+/* ----------------------------------------------- Defines moved to GPIO.H
 #ifndef _GPIO_CONTROL_
 #define _GPIO_CONTROL_
 
@@ -48,7 +72,7 @@ __STATIC_INLINE void TOGGLE_GPIO_PIN(cyhal_gpio_t pin )	 { cyhal_gpio_toggle(pin
 #define TEST_HAL_PIN(pin)	 (cyhal_gpio_read(pin))		// returns bool
 #endif
 
-#endif /* _GPIO_CONTROL_ */
+#endif  _GPIO_CONTROL_ */
 
 /* debug helpers */
 #ifdef DEBUG
@@ -69,36 +93,10 @@ __STATIC_INLINE void TOGGLE_GPIO_PIN(cyhal_gpio_t pin )	 { cyhal_gpio_toggle(pin
 ------------------------------------------------------------------------------*/
 
 
-typedef struct
-{
-	const char* name;
-	int			key;
-} keyword_t;
-
-
 /*------------------------------------ defined in cmddprocessor.c */
 
-int find_KeywordConstant ( const keyword_t* , size_t , const char* );
-const char* find_KeywordName ( const keyword_t*, size_t, const int );
+// int find_KeywordConstant ( const tkeywrd_t* , size_t , const char* );
+// const char* find_KeywordName ( const tkeywrd_t*, size_t, const int );
 
-/*--------------------------------- local includes */
-#include "cfifo.h"
-#include "nmea.h"
-#include "Uarts.h"
-#include "Timers.h"
-#include "Novatel.h"
-#include "imu.h"
-#include "imu_stim.h"
-#include "imu_kvh.h"
-#include "usb_cdc.h"
-#include "retarget_console.h"
-#include "cmdprocessor.h"
-
-/*--------------------------------- main globals */
-extern const char VersionString[];
-extern const char _consoleHeader[];
-extern _ports_t LoggingPort;
-extern uint32_t imuFrequency;
-extern bool log_gnss_records;
 
 #endif /* GLOBALDEFS_H_ */

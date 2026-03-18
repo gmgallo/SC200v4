@@ -21,24 +21,21 @@
 #include "cyhal.h"
 #include "cybsp.h"
 #include "eprom.h"
+
+/*--------------------------------- project includes */
 #include "globaldefs.h"
-
-/*----------------------------------------------------------------------------- numeric converters */
-inline bool isdec(char c)	{ return (c >='0' && c <= '9'); }
-inline bool ishex(char c) 	{ return (isdec(c) || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f')); }
-inline int dec2bin(char c)  { return c - '0'; }
-inline int hex2bin(char c)  { return ((c >= 'a') ? c - 'W' : ((c >= 'A') ? c - '7' : c - '0')); }
-
-#ifdef __GNUC__
-#if __GNUC_PREREQ (4, 3)
-static __inline unsigned short _bswap16(unsigned short __bsx) { return __builtin_bswap16 (__bsx);  }
-static __inline unsigned int   _bswap32(unsigned int __bsx)   { return __builtin_bswap32 (__bsx);  }
-#elif
-inline uint16_t ToEndian16(uint16_t a) { return (a >> 8) | (a << 8); }
-inline uint32_t ToEndian32(uint32_t a) { return (a >> 24) | ((a & 0xff0000) >> 8) | ((a & 0xff00)<<8) | ((a & 0xff)<<24); }
-#endif
-
-#endif
+#include "cfifo.h"
+#include "gpio.h"
+#include "nmea.h"
+#include "Uarts.h"
+#include "Timers.h"
+#include "Novatel.h"
+#include "imu.h"
+#include "imu_stim.h"
+#include "imu_kvh.h"
+#include "usb_cdc.h"
+#include "retarget_console.h"
+#include "cmdprocessor.h"
 
 /*------------------------------------------------------------ Dictionary */
 
@@ -60,9 +57,9 @@ typedef struct
  *--------------------------------------------------------------------------*/
 const char* SearchDictionary(dictionary_t *pd, size_t cnt, const int key, const char *_def);
 
+
 /*-------------------------------------------------------------- Interrupt configurator for UARTs */
 /* WARNING do not use for GPIO  (cy_stc_sysint_t) MUST BE GLOBAL FOR GPIO PINS */
-
 
 static inline void ConfigureInterrupt(IRQn_Type src, uint32_t priority, cy_israddress isr_address)
 {
@@ -78,6 +75,12 @@ static inline void ConfigureInterrupt(IRQn_Type src, uint32_t priority, cy_israd
 }
 
 /************************************************************************************* main.c */
+extern const char VersionString[];
+extern const char _consoleHeader[];
+extern _ports_t LoggingPort;
+extern uint32_t imuFrequency;
+extern bool log_gnss_records;
+
 void Send_GNSS_Record( void* pdata, size_t data_size);
 void Purge_GNSS_Buffer();
 

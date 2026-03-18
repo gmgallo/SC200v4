@@ -6,7 +6,6 @@
  */
 
 #include "common.h"
-#include "gpio.h"
 #include "dmacfg.h"
 
 //#define DEBUG_GPS_ISR
