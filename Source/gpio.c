@@ -55,7 +55,7 @@ void j6_isr_cb(void *arg, cyhal_gpio_event_t event)
 
     printf("PIN %s Event %s\n", pcbargs->pin_id.name, (level? "HIGH":"LOW"));
 
-    pcbargs->fcb((const char*)pcbargs->pin_id.name , level); // Call user function
+    pcbargs->fcb((char*)pcbargs->pin_id.name , level); // Call user function
 }
 
 

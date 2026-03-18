@@ -219,7 +219,7 @@ volatile bool Enable_GNSS_Logging = false;
 /*---------------------------------------------------------------------
  * LogNovatelMessage() - Called from ISR or message processing functions
  */
-inline void LogNovatelMessage(uint8_t* buf, uint32_t size)
+void LogNovatelMessage(uint8_t* buf, uint32_t size)
 {
 	if (LoggingPort != 0 )
 	{
@@ -289,7 +289,7 @@ void ProcessCommandAnswer(uint8_t* buf, size_t size )
 
 int delaycnt = 0;
 
-inline int WaitOemAnswer(uint32_t max_msec)
+int WaitOemAnswer(uint32_t max_msec)
 {
 	delaycnt = 0;
 
@@ -308,7 +308,7 @@ inline int WaitOemAnswer(uint32_t max_msec)
 
 extern uint16_t LastStoredRecord; // forward reference
 
-inline int WaitForRecord(uint16_t msg_id)
+int WaitForRecord(uint16_t msg_id)
 {
 	delaycnt = 0;
 
@@ -379,7 +379,7 @@ OEM7700_Answer SendOEM7700CommandWithRetry(const char* str, int retries)
 }
 
 /* Semd comands and ignore result */
-inline void Send_Command_List_with_retry(const char* const* list, int count)
+void Send_Command_List_with_retry(const char* const* list, int count)
 {
 	for (int i = 0; i < count; i++)
 	{
@@ -388,7 +388,7 @@ inline void Send_Command_List_with_retry(const char* const* list, int count)
 }
 
 /* Semd comands and test result ends at first failed command */
-inline bool Send_Command_List_with_test(const char* const* list, int count)
+bool Send_Command_List_with_test(const char* const* list, int count)
 {
 	for (int i = 0; i < count; i++)
 	{

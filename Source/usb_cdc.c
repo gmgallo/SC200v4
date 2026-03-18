@@ -65,7 +65,7 @@ volatile bool USB_Must_Connect = false;
 
 
 #define RECONNECT_PERIOD_MS 	5000	// try to reconnect every 5 seconds
-#define CONNECT_TIMEOUT_MS		15000	// 15 sec wait for CPU enumerate the arrival
+#define CONNECT_TIMEOUT_MS		5000	// 5 sec wait for CPU enumerate the arrival
 
 
 volatile GPT_HANDLE _Uthandle = INVALID_GPTIMER_HANDLE;

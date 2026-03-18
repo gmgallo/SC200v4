@@ -11,7 +11,6 @@
 
 #pragma pack(push,1)
 
-
 /*---------------------------- EXTRACTED FROM MESSAGE HEADERS ------------*/
 extern volatile uint16_t GPS_Week;
 extern volatile uint32_t GPS_WeekSeconds;
@@ -174,13 +173,12 @@ inline uint16_t GetRecordLength(const uint8_t* hdr)
 {
 	if (IsShortHeader(hdr))
 	{
-		return((uint16_t)((span_hdr*)hdr)->S.msglen ) + sizeof(span_short_hdr) + sizeof(uint32_t);
+		return ((span_hdr*)hdr)->S.msglen + sizeof(span_short_hdr) + sizeof(uint32_t);
 	}
 	if (IsLongHeader(hdr))
 	{
-		return ((span_hdr*)hdr)->L.msglen  + sizeof(span_long_hdr) + sizeof(uint32_t);
+		return ((span_hdr*)hdr)->L.msglen + sizeof(span_long_hdr) + sizeof(uint32_t);
 	}
-
 	return 0;
 }
 

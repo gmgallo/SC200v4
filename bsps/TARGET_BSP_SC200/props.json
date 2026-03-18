@@ -40,10 +40,11 @@
                 "cat1cm0p": "release-v1.10.0",
                 "core-lib": "release-v1.7.0",
                 "core-make": "release-v3.8.0",
+                "emeeprom": "latest-v2.X",
                 "mtb-hal-cat1": "release-v2.7.4",
                 "mtb-pdl-cat1": "release-v3.20.1",
                 "recipe-make-cat1a": "release-v2.6.0",
-                "udb-sdio-whd": "release-v1.2.1"
+                "usbdev": "latest-v2.X"
             },
             "flow_version": "2.0",
             "min_tools": "3.0.0",
