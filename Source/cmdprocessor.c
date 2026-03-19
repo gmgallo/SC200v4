@@ -386,41 +386,6 @@ const char* find_KeywordName ( const tkeywrd_t* list, size_t size, const int key
 
 /*----------------------------------------------------------------- IMU Commands arguments */
 
-const tkeywrd_t ImuFormatDictionary[] =
-{
-	{"FSAS", fmtFSAS_NATIVE},		// used for debugging only
-	{"NRAW", fmtNOVATEL_RAW},		// default to be consistent with other logs form OEM7700 receiver
-	{"NIMR", fmtNOVATEL_IMR},		// IMR format not used
-	{"STIM", fmt_STIM300},			// For debugging only
-	{"KVH", fmt_KVH},				// For debugging only
-};
-
-
-const tkeywrd_t ImuTypeList[] =
-{
-	{ "FSAS", IMUType_FSAS },
-	{ "STIM", IMUType_STIM300 },
-	{ "KVH", IMUType_KVH },
-};
-
-
-const tkeywrd_t ImuComTargetList[] =
-{
-	{ "PSOC", Target_PSOC },
-	{ "NOVATEL", Target_NovAtel },
-};
-
-const char* GetImuTypeName( imu_type_t type)
-{
-	return find_KeywordName(ImuTypeList, ARRAY_SIZE(ImuTypeList), type);
-}
-
-const char* ImuConnectName(imu_target_t target)
-{
-	return find_KeywordName(ImuComTargetList, ARRAY_SIZE(ImuComTargetList), target);
-}
-
-
 int sprintfconfig(char* buffer, size_t size)
 {
 	sys_config_t config;
@@ -431,7 +396,7 @@ int sprintfconfig(char* buffer, size_t size)
 	cnt += snprintf(buffer, size, "Soft reset: %s\n", (config.soft_reset != 0? "Yes": "No"));
 	cnt += snprintf(buffer+cnt, size-cnt,"No COM2 Log Init: %s\n",config.no_com2_logs_init != 0?  "True": "False");
 	cnt += snprintf(buffer+cnt, size-cnt,"IMU Type: %s\n", GetImuTypeName(config.imu_type));
-	cnt += snprintf(buffer+cnt, size-cnt,"IMU connect to: %s\n", ImuConnectName(config.imu_connect));
+	cnt += snprintf(buffer+cnt, size-cnt,"IMU connect to: %s\n", GetImuConnectName(config.imu_connect));
 
 	return cnt;
 }
@@ -488,13 +453,28 @@ char* verbose_cmd(char** tokens, int cnt, _ports_t sender)
 typedef char* (*grab_fn)(uint8_t*, _ports_t);
 typedef void (*_gab_disconnect)();
 
-grab_fn grab_input = NULL;
-_gab_disconnect GrabDisconnect = NULL;
+grab_fn _grab_input = NULL;
+_gab_disconnect _release_grab = NULL;
+
+void _grab_console(grab_fn grab, _gab_disconnect disconnect)
+{
+	_grab_input = grab;
+	_release_grab = disconnect;
+}
+
+void _release_console()
+{
+	_grab_input = NULL;
+
+	if (_release_grab != NULL)
+		_release_grab();
+}
+
 
 char* ProcessCommand(char* buffer, _ports_t sender)
 {
-	if (grab_input != NULL)
-		return grab_input((uint8_t*)buffer, sender);
+	if (_grab_input != NULL)
+		return _grab_input((uint8_t*)buffer, sender);
 
 	const char delims[] = " \r\n";
 	char *tokens[MAX_CMD_TOKENS];
@@ -1313,7 +1293,7 @@ char *imuformat_cmd(char**tokens, int cnt, _ports_t port)
 	{
 		return PrintCmdError( "Missing FORMAT argument." );
 	}
-	int format = find_KeywordConstant( ImuFormatDictionary, ARRAY_SIZE(ImuFormatDictionary), tokens[1]);
+	int format = find_KeywordConstant( ImuFormatsDictionary, ImuFormatsCount, tokens[1]);
 
 
 	if ( format == NOT_FOUND )
@@ -1334,7 +1314,7 @@ char *imuformat_cmd(char**tokens, int cnt, _ports_t port)
  * 	IMUTYPE type
  *
  * 	Argument:
- * 		type 		FSAS or STIM
+ * 		Imu types supported	FSAS, STIM, KVH, etc.
  *
  */
 
@@ -1342,14 +1322,16 @@ char *imutype_cmd(char** tokens, int cnt, _ports_t port)
 {
 	if (cnt < 2)
 	{
-		return PrintCmdError( "Missing TYPE argument.");
+		PrintImuType();
+		return "";
 	}
 
-	int key = find_KeywordConstant( ImuTypeList, ARRAY_SIZE(ImuTypeList), tokens[1]);
+	int key = find_KeywordConstant( ImuTypeList, ImuTypeCount, tokens[1]);
 
 	if (key == NOT_FOUND )
 	{
-		return PrintCmdError("Missing IMU TYPE argument.");
+		PrintValidImuTypes();
+		return PrintCmdError("\nInvalidIMU TYPE argument.\nFormat: IMUTYPE type [SAVE]");
 	}
 	else
 	{
@@ -1387,7 +1369,7 @@ char *imuconnect_cmd(char** tokens, int cnt, _ports_t port)
 		return PrintCmdError( "Missing TYPE argument.");
 	}
 
-	int key = find_KeywordConstant( ImuComTargetList, ARRAY_SIZE(ImuComTargetList), tokens[1]);
+	int key = find_KeywordConstant( ImuComTargets, ImuComTargetsCount, tokens[1]);
 
 	if (key == NOT_FOUND )
 	{
@@ -2154,18 +2136,12 @@ char *GrabConsoleInput(uint8_t* buf, _ports_t port)
 {
 	if (buf[0] == 'x' || buf[0] == 'X') // Test for grab end
 	{
-		grab_input = NULL;
-
-		if ( GrabDisconnect != NULL)
-		{
-			GrabDisconnect();
-			GrabDisconnect = NULL;
-		}
-
+		_release_console();
 		return "Console disconnected.\n";
 	}
 	int cnt = strlen((char*)buf);
-	Uart_IMU_Send(buf, cnt); 	// Send line to IMU port
+	
+	Uart_IMU_SendString((char_t*)buf); 	// Send line to IMU port
 
 	return "Data sent to IMU port.\n";
 }
@@ -2203,12 +2179,11 @@ char* test_imu_loopback( _ports_t port )
 	Init_Uart_IMU( imu_bauds );
 
 	Set_IMU_COM_Target(Target_PSOC);
-	old_isr_level = Reconfig_Uart_IMU(1, false); // One interrupt per 2 characterS
+	old_isr_level = Reconfig_Uart_IMU(1, false); // One interrupt per 2 characters
 	old_processor = SetImuMsgProcessor(TestMsgProcessor );
 	Enable_Uart_IMU();
 
-	GrabDisconnect = DisconnectLoopback;
-	grab_input = GrabConsoleInput;
+	_grab_console(GrabConsoleInput ,DisconnectLoopback);
 
 	return CmdAnswer;
 }
@@ -2266,8 +2241,8 @@ char *imuredir_cmd(char**tokens, int cnt, _ports_t port)	// debug command
 		old_isr_level = Reconfig_Uart_IMU(STIM_RECORD_SIZE-1, false);
 	}
 	old_processor = SetImuMsgProcessor(ImuRedirMsgProcessor );
-	GrabDisconnect = DisconnectLoopback;
-	grab_input = GrabConsoleInput;
+
+	_grab_console(GrabConsoleInput,DisconnectLoopback);
 
 	Enable_Uart_IMU();
 
@@ -2326,7 +2301,7 @@ char *imubauds_cmd(char** tokens, int cnt, _ports_t port)	// debug command
 			snprintf(CmdAnswer,  ARRAY_SIZE(CmdAnswer), "IMU clock adjust FAILED\n" );
 		}
 	}
-	else if (ndx > 0 && ndx < 5 && cnt == 3)
+	else if (ndx > 0 && ndx < 5 && cnt == 2)
 	{
 		imu_bauds = baud_names[ndx].clk;
 
@@ -2390,9 +2365,9 @@ char *imu_console_cmd(char**tokens, int cnt, _ports_t port)
 	if (SpanStatus.ImuType == IMUType_KVH)
 	{
 		KVH_EnterConfigMode(port);
-
-		GrabDisconnect = KVH_ExitConfigMode;
-		grab_input = GrabConsoleInput;
+		old_processor = SetImuMsgProcessor(TestMsgProcessor );
+		old_isr_level = Reconfig_Uart_IMU(0, false); // One interrupt per character
+		_grab_console(GrabConsoleInput, DisconnectLoopback);
 
 		return "KVH Console. Send commands to KVH or 'X' to end.\n";
 	}
@@ -2414,8 +2389,7 @@ char *GrabInput2(uint8_t* buf, _ports_t port)
 {
 	if (buf[0] == 'x' || buf[0] == 'X')
 	{
-		grab_input = NULL;
-		Stim_Stop_Logging();
+		_release_console();
 		Init_IMU_Interface(SysConfig.imu_type, SysConfig.imu_connect);
 
 		return "End of Test.\n";
@@ -2426,7 +2400,7 @@ char *GrabInput2(uint8_t* buf, _ports_t port)
 char* test_log_imu(char**tokens, int cnt, _ports_t port )
 {
 	Init_IMU_Interface(IMUType_STIM300, Target_PSOC);
-	grab_input = GrabInput2;
+	_grab_console(GrabInput2, Stim_Stop_Logging);
 
 	if(cnt < 3)
 		return "Missing port ID to forward.\n";
@@ -2441,7 +2415,7 @@ char* test_forward_imu( char* port )
 	char *buf = CmdAnswer;
 	size_t size = ARRAY_SIZE(CmdAnswer);
 
-	grab_input = GrabInput2;
+	_grab_console(GrabInput2, Stim_Stop_Logging);
 
 	_ports_t log_port = FindPortID(port);
 
@@ -2541,7 +2515,7 @@ char *GrabInput3(uint8_t* buf, _ports_t port)
 
 	if (buf[0] == 'x' || buf[0] == 'X')
 	{
-		grab_input = NULL;
+		_release_console();
 		SysConfig.imu_connect = Target_NovAtel;
 
 		return "End of Test.\n";
@@ -2564,7 +2538,7 @@ char* test_bswap( _ports_t port )
 
 	snprintf(buf, size,"Byte swap test. Enter a 32 bit number - X or x to end\n");
 
-	grab_input = GrabInput3;
+	_grab_console(GrabInput3, NULL);
 
 	return buf;
 }

@@ -23,13 +23,13 @@
 #define ARRAY_SIZE(a)	 (sizeof(a)/sizeof(a[0]))
 #endif
 
-
 typedef struct _tag_keyword
 {
 	const char* name;
 	int			key;
 } tkeywrd_t;
 
+#define DICTIONARY_SIZE(dict) (sizeof(dict)/sizeof(dict[0]))
 
 /*----------------------------------------------------------------------------- numeric converters */
 inline bool isdec(char c)	{ return (c >='0' && c <= '9'); }
@@ -46,33 +46,6 @@ inline int hex2bin(char c)  { return ((c >= 'a') ? c - 'W' : ((c >= 'A') ? c - '
 	inline uint32_t ToEndian32(uint32_t a) { return (a >> 24) | ((a & 0xff0000) >> 8) | ((a & 0xff00)<<8) | ((a & 0xff)<<24); }
 	#endif
 #endif
-
-/* ----------------------------------------------- Defines moved to GPIO.H
-#ifndef _GPIO_CONTROL_
-#define _GPIO_CONTROL_
-
-#define SET_BITS(a,b)	 ((a) |=  (b))
-#define CLR_BITS(a,b)	 ((a) &= ~(b))
-#define TOGGLE_BITS(a,b) ((a) ^= (b))
-#define TEST_BITS(a,b)	 ((a) & (b))
-
-
-__STATIC_INLINE void SET_GPIO_PIN(cyhal_gpio_t pin )	 { cyhal_gpio_write(pin, true); }
-__STATIC_INLINE void CLEAR_GPIO_PIN(cyhal_gpio_t pin )	 { cyhal_gpio_write(pin, false); }
-__STATIC_INLINE void TOGGLE_GPIO_PIN(cyhal_gpio_t pin )	 { cyhal_gpio_toggle(pin); }
-
-//#define TOGGLE_GPIO_PIN(a,b) (Cy_GPIO_Inv((GPIO_PRT_Type *)(a),(uint32_t )(b)))
-//#define CLEAR_GPIO_PIN(a,b)  (Cy_GPIO_Clr((GPIO_PRT_Type *)(a),(uint32_t )(b)))
-
-#ifndef TEST_PIN
-#define TEST_PIN(a,b)	   Cy_GPIO_Read((GPIO_PRT_Type *)(a),(uint32_t )(b))
-#endif
-
-#ifndef TEST_HAL_PIN
-#define TEST_HAL_PIN(pin)	 (cyhal_gpio_read(pin))		// returns bool
-#endif
-
-#endif  _GPIO_CONTROL_ */
 
 /* debug helpers */
 #ifdef DEBUG
@@ -91,12 +64,5 @@ __STATIC_INLINE void TOGGLE_GPIO_PIN(cyhal_gpio_t pin )	 { cyhal_gpio_toggle(pin
 #define SI_TP2			P3_4		OUT
 #define SI_TP3			P7_3		OUT
 ------------------------------------------------------------------------------*/
-
-
-/*------------------------------------ defined in cmddprocessor.c */
-
-// int find_KeywordConstant ( const tkeywrd_t* , size_t , const char* );
-// const char* find_KeywordName ( const tkeywrd_t*, size_t, const int );
-
 
 #endif /* GLOBALDEFS_H_ */

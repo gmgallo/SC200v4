@@ -561,7 +561,9 @@ void Isr_Uart_IMU(void)
 {
 
     /* Get RX interrupt sources */
-    if (0UL != (CY_SCB_RX_INTR & Cy_SCB_GetInterruptCause(UART_IMU_HW) ))
+	uint32_t InterruptCause = Cy_SCB_GetInterruptCause(UART_IMU_HW);
+
+    if (0UL != (CY_SCB_RX_INTR & InterruptCause))
     {
 #ifdef DEBUG_IMU_ISR
    	SET_DEBUG_TP(UART_IMU_TP);		// Break detect
@@ -599,10 +601,11 @@ void Isr_Uart_IMU(void)
 
 		Cy_SCB_ClearRxInterrupt(UART_IMU_HW, srcInterrupt);
     }
-
+	else if (0UL != (CY_SCB_TX_INTR & InterruptCause))
+    {
     /* service transmit interrupts */
-     Cy_SCB_UART_Interrupt(UART_IMU_HW, &uart_IMU_Context);
-
+     	Cy_SCB_UART_Interrupt(UART_IMU_HW, &uart_IMU_Context);
+	}
 }
 
 /*---------------------------------------------------------------------------
@@ -735,6 +738,10 @@ void Uart_IMU_Send(uint8_t *txBuffer, size_t count)
 	Cy_SCB_UART_Transmit(UART_IMU_HW, txBuffer, count, &uart_IMU_Context);
 }
 
+void Uart_IMU_SendString(const char_t*string)
+{
+    Cy_SCB_UART_PutString(UART_IMU_HW, string);
+}
 
 /*---------------------------------------------------------------------------------*
  * UART J6 - Aux data over MB J6 connector                                         |

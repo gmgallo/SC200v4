@@ -35,16 +35,16 @@
 
 /* __TIMESTAMP__ is a gcc defined, fix length string of the type: Thu Jun 02 19:13: 2022 */
 
-const char VersionString[] = "G2-SC200 - FSAS Firmware Version 4.0 - " __TIMESTAMP__;
+const char VersionString[] = "G2-SC200 - Firmware Version 4.0 - " __TIMESTAMP__;
 
 const char _consoleHeader[] ="\r\n"
 		"*******************************************************************************\r\n"
 	    "*         - G2-SC200 - System Controller with built-in GNSS/INS -             *\r\n"
 		"*                Copyright (C) 2024 - 2026, G2 AIRBORNE SYSTEMS               *\r\n"
 		"*                                                                             *\r\n"
-		"*       THIS FIRMWARE VERSION SUPPORTS IMAR FSAS, STIM300, and KVH IMUs      *\r\n"
+		"*       THIS FIRMWARE VERSION SUPPORTS IMAR FSAS, STIM300, and KVH IMUs       *\r\n"
 		"*-----------------------------------------------------------------------------*\r\n"
-		"*       %s      *\r\n" /* This line to be filled by  IDString */
+		"*       %s            *\r\n" /* This line to be filled by  IDString */
 		"*******************************************************************************\r\n\n";
 
 sys_config_t SysConfig;
@@ -121,7 +121,7 @@ char mainBuffer[1024] = "";
 /****************************************************************************
 * PrintWithTime - Outputs message with up time stamp to log terminal
 *****************************************************************************/
-void PrintWithTime(char *msg)
+void PrintWithTime(const char *msg)
 {
 	printf( "\n[%s] %s", GetUpTimeStr(), msg );
 }

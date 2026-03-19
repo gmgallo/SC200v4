@@ -343,16 +343,15 @@ void Init_PPS_MONITOR_PWM(bool oneShot)
 
 	 active_pps_mon_config.runMode = oneShot? CY_TCPWM_PWM_ONESHOT: CY_TCPWM_PWM_CONTINUOUS;
 
-	if (CY_TCPWM_SUCCESS !=  Cy_TCPWM_PWM_Init(PPS_MON_HW, PPS_MON_NUM, &active_pps_mon_config) )
+	if (CY_TCPWM_SUCCESS ==  Cy_TCPWM_PWM_Init(PPS_MON_HW, PPS_MON_NUM, &active_pps_mon_config) )
 	{
+		/* Enable the initialized PWM */
+		Cy_TCPWM_PWM_Enable(PPS_MON_HW,PPS_MON_NUM);
+
+		/* if not one shot start timer at once */
+		Cy_TCPWM_TriggerReloadOrIndex_Single(PPS_MON_HW, PPS_MON_NUM);
 		/* Handle possible errors */
 	}
-	    /* Enable the initialized PWM */
-	Cy_TCPWM_PWM_Enable(PPS_MON_HW,PPS_MON_NUM);
-
-   	/* if not one shot start timer at once */
-
-	Cy_TCPWM_TriggerReloadOrIndex_Single(PPS_MON_HW, PPS_MON_NUM);
 }
 
 void StopPPSMonitor()

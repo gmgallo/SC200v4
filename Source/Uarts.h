@@ -67,6 +67,7 @@ void Clear_Uart_IMU_Buffers(bool enable);
 
 fnMessageProcessor SetImuMsgProcessor( fnMessageProcessor fn);
 void Uart_IMU_Send(uint8_t *txBuffer, size_t count);
+void Uart_IMU_SendString(const char_t*string);
 
 void Set_Uart_IMU_Baudrate(bauds_t bauds);
 bool _cycfg_Uart_IMU_clock(uint32_t div, uint32_t frac);

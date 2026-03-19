@@ -62,6 +62,35 @@ FSAS_Status volatile IMUStatus =
 		.Records_Skipped = 0
 };
 
+const tkeywrd_t ImuTypeList[] =
+{
+	{ "FSAS", IMUType_FSAS },
+	{ "STIM", IMUType_STIM300 },
+	{ "KVH", IMUType_KVH },
+};
+
+const size_t ImuTypeCount = DICTIONARY_SIZE(ImuTypeList);
+
+
+const tkeywrd_t ImuComTargets[] =
+{
+	{ "PSOC", Target_PSOC },
+	{ "NOVATEL", Target_NovAtel },
+};
+
+const size_t ImuComTargetsCount = DICTIONARY_SIZE(ImuComTargets);
+
+
+const tkeywrd_t ImuFormatsDictionary[] =
+{
+	{"FSAS", fmtFSAS_NATIVE},		// used for debugging only
+	{"NRAW", fmtNOVATEL_RAW},		// default to be consistent with other logs form OEM7700 receiver
+	{"NIMR", fmtNOVATEL_IMR},		// IMR format not used
+	{"STIM", fmt_STIM300},			// For debugging only
+	{"KVH", fmt_KVH},				// For debugging only
+};
+
+const size_t ImuFormatsCount = DICTIONARY_SIZE(ImuFormatsDictionary);
 
 /*----------------------------------------------------------------------------*/
 /****************************************************************************
@@ -267,6 +296,46 @@ bool Init_IMU_Interface(imu_type_t Type, imu_target_t Target)
 }
 
 /****************************************************************************
+ * Query IMU type and connection targe. 
+ */
+void PrintImuType()
+{
+	char buf[100];
+
+	const char* type = GetImuTypeName(SysConfig.imu_type);
+
+	if (type == NULL)
+		type = "INVALID";
+	
+	const char* Target = GetImuConnectName(SysConfig.imu_connect);
+
+	if (Target == NULL)
+		Target = "INVALID";
+
+	snprintf(buf,100,"IMU Type %s - Port: %s", type, Target);
+	PrintWithTime( buf );
+}
+
+void PrintValidImuTypes()
+{
+	PrintWithTime("Valid IMU Types:\n");
+	for (size_t i=0; i<ImuTypeCount; i++)
+	{
+		printf( "%s\n", ImuTypeList[i].name );
+	}	
+}
+
+const char* GetImuTypeName( imu_type_t type)
+{
+	return find_KeywordName(ImuTypeList, ImuTypeCount, type);
+}
+
+const char* GetImuConnectName(imu_target_t target)
+{
+	return find_KeywordName(ImuComTargets, ImuComTargetsCount, target);
+}
+
+/****************************************************************************
 * Set_IMU_COM_Target()
 *
 * Connects the IMU to PSOC6 or OEM7700 COM2 for IMUs supported by NovAtel
@@ -298,6 +367,7 @@ void Store_IMU_COM_Target(imu_target_t target)
 *****************************************************************************/
 void Set_IMU_Type(imu_type_t Type, bool save)
 {
+	SpanStatus.ImuType = Type;
 	SysConfig.imu_type = Type;
 	if (save)
 		SaveConfig(&SysConfig);

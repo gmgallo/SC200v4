@@ -20,7 +20,7 @@ _ports_t    FindPortID( char* token);
 
 /********************************* System Config Keywords */
 const char* GetImuTypeName( imu_type_t type);
-const char* ImuConnectName(imu_target_t target);
+const char* GetImuConnectName(imu_target_t target);
 
 int ToInt32(char*token, int32_t *pvalue);
 

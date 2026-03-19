@@ -25,13 +25,13 @@ void kvh_console_msg_processor(uint8_t* buf, size_t cnt)
 void KVH_EnterConfigMode(_ports_t port)
 {
     console_port = port;
-     Uart_IMU_Send((uint8_t*)kvh_enter_config_cmd, strlen(kvh_enter_config_cmd));
+     Uart_IMU_SendString((char_t*)kvh_enter_config_cmd);
      prev_msg_processor = SetImuMsgProcessor(kvh_console_msg_processor);
 }
 
 void KVH_ExitConfigMode()
 {
-    Uart_IMU_Send((uint8_t*)kvh_exit_config_cmd, strlen(kvh_exit_config_cmd));
+    Uart_IMU_SendString((char_t*)kvh_exit_config_cmd);
     SetImuMsgProcessor(prev_msg_processor);
 }   
 

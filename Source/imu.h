@@ -12,17 +12,10 @@
 #ifndef IMU_H_
 #define IMU_H_
 
-#include "globaldefs.h"
-#include "Novatel.h"
+#include "common.h"
+//#include "Novatel.h"
 
 #pragma pack(push,1)
-
-
- /* &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
- *  NOTE: THE IMU TRIGGER LOGIC NEEDS TO BE REWORKED FOR SC200.
- *  IMU TRIGGER NOW GOES DIRECTLY FROM OEM7700 EVENT OUT 1 TO IMU DAS SIGNAL
- *  &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&*/
-
 
 /****************************************************************************
 * IMU flags
@@ -49,7 +42,16 @@ typedef enum
 
 } imu_target_t;
 
-#define DEFAULT_IMU_TYPE	IMUType_FSAS	// can be changed and stored in NV EEPROM
+extern const tkeywrd_t ImuTypeList[];
+extern const size_t    ImuTypeCount;
+
+extern const tkeywrd_t ImuComTargets[];
+extern const size_t    ImuComTargetsCount;
+
+extern const tkeywrd_t ImuFormatsDictionary[];
+extern const size_t   ImuFormatsCount;
+
+#define DEFAULT_IMU_TYPE	IMUType_KVH	// can be changed and stored in NV EEPROM
 #define DEFAULT_IMU_TARGET	Target_PSOC		// For receivers without SPAN firmware
 
 /****************************************************************************
@@ -59,6 +61,10 @@ bool Init_IMU_Interface(imu_type_t Type, imu_target_t Target);
 //bool Test_IMU_NoGo();
 void LogImuErrors();
 
+void PrintImuType();
+void PrintValidImuTypes();
+const char* GetImuTypeName( imu_type_t type);
+const char* GetImuConnectName(imu_target_t target);
 
 /****************************************************************************
 * Set_IMU_Type()
@@ -192,18 +198,6 @@ typedef struct tagFSAS_SN
 #define FSAS_CRC_SIZE		(sizeof(uint16_t))
 #define FSAS_SN_RECORD_SIZE	(sizeof(FSAS_SN_t))
 #define FSAS_SN_SYNC_OFFSET (sizeof(FSAS_SN_t)-sizeof(uint16_t))
-
-#ifndef INS_t_DEFINED
-#define INS_t_DEFINED
-/* IMU record of NovAtel IMR file format */
-typedef struct tINS_t
-{
-	double Time; 			// 8  - GPS time frame – seconds of the week
-	int32_t dAng[3];		// 12 - delta theta or angular rate depending on flag in the header
-	int32_t dVel[3];		// 12 - delta Velocity or acceleration depending on the the flag in the header.
-
-} INS_t;					// 32 bytes
-#endif
 
 /* INS transmit record - includes start ID, status and CRC */
 

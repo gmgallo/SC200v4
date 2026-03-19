@@ -1651,7 +1651,7 @@
                         <Param id="KillMode" value="CY_TCPWM_PWM_STOP_ON_KILL"/>
                         <Param id="Period0" value="50000"/>
                         <Param id="Period1" value="32768"/>
-                        <Param id="PwmAlignment" value="CY_TCPWM_PWM_LEFT_ALIGN"/>
+                        <Param id="PwmAlignment" value="CY_TCPWM_PWM_RIGHT_ALIGN"/>
                         <Param id="PwmMode" value="CY_TCPWM_PWM_MODE_PWM"/>
                         <Param id="ReloadInput" value="CY_TCPWM_INPUT_RISINGEDGE"/>
                         <Param id="RunMode" value="CY_TCPWM_PWM_CONTINUOUS"/>

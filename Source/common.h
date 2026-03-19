@@ -89,6 +89,6 @@ void Send_IMU_Record( void* pdata, size_t data_size);
 void PurgeBuffers();
 
 void StoreReportRecord( dbuf_t *buf, _ports_t port);
-void PrintWithTime(char *msg);
+void PrintWithTime(const char *msg);
 
 #endif /* COMMON_H_ */
