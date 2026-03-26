@@ -43,6 +43,9 @@ openocd.tcl
 .vscode/
 *.code-workspace
 
+# Local editor/cache artifacts
+.cache/
+
 # IAR Embedded Workbench files
 
 # IAR Project file.
