@@ -30,6 +30,8 @@ int PrintStatusLong(char* buffer, size_t size);
 char* ScanCommandLine(uint8_t *buf, int cnt, _ports_t sender );
 char* ProcessCommand(char* buffer, _ports_t sender);
 
+void ProcessAsyncMessages(); // serviced by the main loop
+void PostAssyncMessage(uint8_t *buf, int cnt, _ports_t receiver);
 /*------------------------------------keyword search */
 int find_KeywordConstant ( const tkeywrd_t* , size_t , const char* );
 const char* find_KeywordName ( const tkeywrd_t*, size_t, const int );

@@ -69,7 +69,11 @@ void SendToPort(_ports_t port, uint8_t* buffer, size_t count)
 		break;
 
 	case UART_CONSOLE:
-		printf((char*) buffer);
+		while(count-- > 0)
+		{
+			char c = *buffer++;
+			console_putchar(c);
+		}
 		break;
 
 	case UART_J6:
@@ -556,6 +560,48 @@ char* ScanCommandLine(uint8_t *buf, int cnt, _ports_t sender )
 		printf("ANS: %s", retval);
 
 	return retval;
+}
+
+/****************************************************************************
+* Asynchronous messages processing 
+*****************************************************************************/
+#define MAX_ASYNC_MESSAGES 10
+typedef struct
+{
+	uint32_t size; 
+	uint8_t* data; /* pointer to data buffer */
+	_ports_t port; /* target port for the message */
+	 
+}async_message_t;
+
+async_message_t AsyncMessageBuffer[MAX_ASYNC_MESSAGES];
+int async_message_index = 0;
+int async_message_count = 0;
+
+void ProcessAsyncMessages() // serviced by the main loop
+{
+	while (async_message_count > 0)
+	{
+		async_message_t *msg = &AsyncMessageBuffer[ (async_message_index - async_message_count + MAX_ASYNC_MESSAGES) % MAX_ASYNC_MESSAGES ];
+
+		SendToPort(msg->port, msg->data, msg->size);
+
+		async_message_count--;
+	}
+
+}
+void PostAssyncMessage(uint8_t *buf, int cnt, _ports_t receiver)
+{
+	if (async_message_count < MAX_ASYNC_MESSAGES)
+	{
+		AsyncMessageBuffer[async_message_index].data = buf;
+		AsyncMessageBuffer[async_message_index].size = cnt;
+		AsyncMessageBuffer[async_message_index].port = receiver;
+
+		async_message_index = (async_message_index + 1) % MAX_ASYNC_MESSAGES;
+		async_message_count++;
+	}
+
 }
 
 
@@ -2059,7 +2105,7 @@ char *benchmark_cmd(char**tokens,int cnt,_ports_t port)
 
 
 /*------------------------------------------------------------------------------------ TESTS */
-char* test_imu_loopback( _ports_t port );
+char* test_imu_loopback(char**tokens, int cnt, _ports_t port );
 char* test_log_imu(char**tokens, int cnt, _ports_t port );
 char* test_forward_imu( char* port );
 char* test_bswap( _ports_t port );
@@ -2074,7 +2120,7 @@ char *test_cmd(char**tokens, int cnt, _ports_t port)
 	if (cnt < 2)
 	{
 			snprintf(buf, size, "Test help:\n"
-					"\tTEST 1 - IMU port loopback.\n"
+					"\tTEST 1 [n] - IMU port loopback. n = record length, default 1\n"
 					"\tTEST 2 - STIM300 Log to port _port_name_.\n"
 					"\tTEST 3 - STIM300 FORWARD TO PORT.\n"
 					"\tTEST 4 - Dequeue IMU Records.\n"
@@ -2093,7 +2139,7 @@ char *test_cmd(char**tokens, int cnt, _ports_t port)
 	{
 		case 1:
 		{
-			buf = test_imu_loopback(port);
+			buf = test_imu_loopback(tokens, cnt, port);
 			break;
 		}
 		case 2:
@@ -2139,11 +2185,11 @@ char *GrabConsoleInput(uint8_t* buf, _ports_t port)
 		_release_console();
 		return "Console disconnected.\n";
 	}
-	int cnt = strlen((char*)buf);
+	//int cnt = strlen((char*)buf);
 	
 	Uart_IMU_SendString((char_t*)buf); 	// Send line to IMU port
 
-	return "Data sent to IMU port.\n";
+	return NULL;
 }
 
 /*----------------------------------------*/
@@ -2171,15 +2217,28 @@ void TestMsgProcessor(uint8_t* buf, size_t cnt)
 	tbIndex =0;
 }
 
-char* test_imu_loopback( _ports_t port )
+
+char* test_imu_loopback(char**tokens, int cnt, _ports_t port )
 {
-	snprintf(CmdAnswer,  ARRAY_SIZE(CmdAnswer), "IMU LOOPBACK TEST\nBidge TX+ to RX+ and TX- to RX-\n"
-						"Send strings over this terminal, or 'X' to end\n");
+	uint32_t record_length = 1;
+
+	if (cnt > 2)
+	{
+		uint32_t n = 0;
+		
+		if (ToUint32(tokens[2], &n) != 1)
+		{
+			return PrintCmdError("Invalid record length parameter\n");
+		}
+		record_length = n;
+	}
+	snprintf(CmdAnswer,  ARRAY_SIZE(CmdAnswer), "IMU LOOPBACK TEST with Record length %ld\nBidge TX+ to RX+ and TX- to RX-\n"
+						"Send strings over this terminal, or 'X' to end\n", record_length);
 
 	Init_Uart_IMU( imu_bauds );
-
 	Set_IMU_COM_Target(Target_PSOC);
-	old_isr_level = Reconfig_Uart_IMU(1, false); // One interrupt per 2 characters
+	old_isr_level = Reconfig_Uart_IMU(record_length -1, false); // One interrupt per 2 characters
+
 	old_processor = SetImuMsgProcessor(TestMsgProcessor );
 	Enable_Uart_IMU();
 
@@ -2240,6 +2299,10 @@ char *imuredir_cmd(char**tokens, int cnt, _ports_t port)	// debug command
 	{
 		old_isr_level = Reconfig_Uart_IMU(STIM_RECORD_SIZE-1, false);
 	}
+	else if(SysConfig.imu_type == IMUType_KVH )
+	{
+		old_isr_level = Reconfig_Uart_IMU(KVH_RECORD_SIZE-1, false);
+	}
 	old_processor = SetImuMsgProcessor(ImuRedirMsgProcessor );
 
 	_grab_console(GrabConsoleInput,DisconnectLoopback);
@@ -2249,6 +2312,55 @@ char *imuredir_cmd(char**tokens, int cnt, _ports_t port)	// debug command
 	return CmdAnswer;
 }
 
+
+
+
+
+/****************************************************************************
+* BAUDSMON PWM
+*
+* Generate accurate pulses on TP6 for the duration of # of bytes
+* Use to compare the actual baud rate received from the INU device
+*****************************************************************************/
+#define BAUDSMON_INTR_PRIORITY  CYHAL_ISR_PRIORITY_DEFAULT // = 3
+#define BAUDSMON_TP	TP6
+bool baudsmon_init = false;
+
+void _bauds_monitor_Isr(void)
+{
+	uint32_t interrupts = Cy_TCPWM_GetInterruptStatusMasked(BAUDSMON_HW, BAUDSMON_NUM);
+
+	/* Handle the compare event trigger */
+	if (0UL != (CY_TCPWM_INT_ON_CC & interrupts))
+	{
+		SET_DEBUG_TP(BAUDSMON_TP);
+	}
+	Cy_TCPWM_ClearInterrupt(BAUDSMON_HW, BAUDSMON_NUM, interrupts );
+}
+
+void InitBaudsMonitor()
+{
+	if (baudsmon_init)
+		return;
+
+    if (CY_TCPWM_SUCCESS != Cy_TCPWM_PWM_Init(BAUDSMON_HW, BAUDSMON_NUM, &BAUDSMON_config))
+    {
+        /* Handle possible errors */
+    }
+    /* Enable the initialized PWM */
+    Cy_TCPWM_PWM_Enable(BAUDSMON_HW, BAUDSMON_NUM);
+
+	ConfigureInterrupt(BAUDSMON_IRQ, BAUDSMON_INTR_PRIORITY, _bauds_monitor_Isr );
+
+	baudsmon_init = true;
+}
+
+void TriggerBaudsMonitor(uint32_t compare)
+{
+	Cy_TCPWM_PWM_SetCompare0Val(BAUDSMON_HW, BAUDSMON_NUM, compare);
+	CLEAR_DEBUG_TP(BAUDSMON_TP);
+	Cy_TCPWM_TriggerReloadOrIndex(BAUDSMON_HW, (1UL << BAUDSMON_NUM));
+}
 
 /*----------------------------------------------------------------------- IMUBAUDS */
 bool _cycfg_Uart_IMU_clock(uint32_t div, uint32_t frac );
@@ -2317,9 +2429,7 @@ char *imubauds_cmd(char** tokens, int cnt, _ports_t port)	// debug command
 		ToUint32(tokens[2], &bytes);
 		uint32_t compare = UART_IMU_config.oversample * 10 * bytes; // total clock pulses for # of bytes
 
-		Cy_TCPWM_PWM_SetCompare0Val(BAUDSMON_HW, BAUDSMON_NUM, compare);
-
-		uint32_t freq = Cy_SysClk_PeriphGetFrequency(CLK2X16_IMU_UART_HW, CLK2X16_IMU_UART_HW);
+		uint32_t freq = Cy_SysClk_PeriphGetFrequency(CLK_IMU_UART_HW, CLK_IMU_UART_HW);
 
 		InitBaudsMonitor();
 
@@ -2327,11 +2437,13 @@ char *imubauds_cmd(char** tokens, int cnt, _ports_t port)	// debug command
 		 {
 			 double duration = (1000.0 * compare)/(double)freq;
 			 snprintf(CmdAnswer,  ARRAY_SIZE(CmdAnswer), "BAUDSMON (%ld clocks @ %ld KHz) will generate a %.2lf ms pulse of %ld bytes on TP6\n",
-					 compare, freq, duration, bytes );
+			 					 compare, freq/1000, duration, bytes );
+
+			 TriggerBaudsMonitor(compare);
 		 }
 		 else
 		 {
-			 snprintf(CmdAnswer,  ARRAY_SIZE(CmdAnswer), "Something went wrong, CLK2X16_IMU_UART reported 0 Hz!\n");
+			 snprintf(CmdAnswer,  ARRAY_SIZE(CmdAnswer), "Something went wrong, CLK_IMU_UART reported 0 Hz!\n");
 		 }
 	}
 	else
@@ -2360,16 +2472,42 @@ char *imu_record_size_cmd(char** tokens, int cnt, _ports_t port)
 	}
 }
 
-char *imu_console_cmd(char**tokens, int cnt, _ports_t port)
+_ports_t consolePort;
+
+void ConsoletMsgProcessor(uint8_t* buf, size_t cnt)
+{
+	// memset(testBuf, 0, ARRAY_SIZE(testBuf) );
+	// memcpy(testBuf, buf, MIN(cnt,MAX_TEST_BUF));
+	// printf("IMU message: %d chars [%s]\n", cnt, testBuf );
+	SendToPort(consolePort, buf, cnt);	
+	while(cnt-- > 0)
+	{
+		char c = *buf++;
+		console_putchar(c);
+	}
+}
+
+void LeaveConsole()
 {
 	if (SpanStatus.ImuType == IMUType_KVH)
 	{
-		KVH_EnterConfigMode(port);
-		old_processor = SetImuMsgProcessor(TestMsgProcessor );
-		old_isr_level = Reconfig_Uart_IMU(0, false); // One interrupt per character
-		_grab_console(GrabConsoleInput, DisconnectLoopback);
+		KVH_ExitConfigMode();
+	}
+}
 
-		return "KVH Console. Send commands to KVH or 'X' to end.\n";
+
+char *imu_console_cmd(char**tokens, int cnt, _ports_t port)
+{
+	consolePort = port;
+	char msg[] = "Entering IMU Console mode. Type X to exit.\n";
+
+	if (SpanStatus.ImuType == IMUType_KVH)
+	{
+		SendToPort(port, (uint8_t*)msg, strlen(msg));
+
+		_grab_console(GrabConsoleInput, LeaveConsole);
+		KVH_EnterConfigMode(port);
+		return NULL;
 	}
 	else
 	{

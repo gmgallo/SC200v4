@@ -109,7 +109,7 @@ sys_config_t SysConfig;
 /****************************************************************************
 * GLOBALS
 *****************************************************************************/
-#define WDT_TIME_OUT_MS  	5000		/* 2 Seconds watchdog timer timeout */
+#define WDT_TIME_OUT_MS  	4900		/* _CYHAL_WDT_MAX_TIMEOUT_MS = 4915 Seconds watchdog timer timeout */
 #define WARMUP_WAIT_TIME_MS 10000		/* 10 seconds cold start warmup */
 
 _ports_t LoggingPort = 0;				/* Flags indicating where to send IMU / GNSS reports */
@@ -232,22 +232,22 @@ void Process_USB_Data_Received( uint32_t usb_port, _ports_t logic_port )
     	Send_USB_CDC_Data( usb_port, (uint8_t*)retval, strlen(retval) );
 }
 
-
-
-void Porocess_Uart_COM_Data_Received( _ports_t com_port )
+void Monitor_COM_Ports()
 {
+	if (!New_COM1_Message)
+ 		return;
+
+    New_COM1_Message = false;
+    
 	memset(comCmd, 0, ARRAY_SIZE(comCmd));
 
 	size_t count = Uart_COM_Read(comCmd, ARRAY_SIZE(comCmd));
-	char* retval = ScanCommandLine(comCmd,count, com_port);
+	char* retval = ScanCommandLine(comCmd,count, UART_COM1);
+	size_t retval_len = strlen(retval);
 
-	if ( retval != NULL && TEST_BITS(Cmd_Echo_On,true))
+	if ( retval != NULL && retval_len > 0 && TEST_BITS(Cmd_Echo_On,true))
 	{
-		if (com_port == UART_COM1 )
-			Uart_COM_Send((uint8_t*)retval, strlen(retval));
-
-		else if (com_port == UART_CONSOLE)
-			printf(retval);
+		Uart_COM_Send((uint8_t*)retval, retval_len);
 	}
 }
 
@@ -510,7 +510,7 @@ int main(void)
 
 	PrintWithTime("Entering main loop\n");
 
-//	Init_WDT();
+	//Init_WDT();
 
 	for (;;)
 	{
@@ -526,16 +526,15 @@ int main(void)
 	    }
 
         /*------------------------------------------------- SCB UART COM1 */
-        if (New_COM1_Message == true)
-        {
-        	New_COM1_Message = false;
-        	Porocess_Uart_COM_Data_Received(UART_COM1);
-        }
+		Monitor_COM_Ports();	// monitor COM ports for flow control and other status changes
 
-        /*----------------------------------------------- SCB UART_CONSOLE */
+		 /*---------------------------------------------- SCB UART Console */
          MonitorConsoleInput();
 
-        /*------------------------------------------ process LOG reports */
+        /*---------------------------------------------- AsyncMessageProcessor */
+		ProcessAsyncMessages();	// process messages from ISRs and other sources outside of main loop context
+
+        /*-------------------------------------------- process LOG reports */
 
         if (LoggingPort != 0 )
         {
@@ -629,7 +628,8 @@ int main(void)
         	}
         }
         Monitor_USB_CDC_Status();	// can't reconnect from an ISR
-	    cyhal_wdt_kick(&wdt_obj);	// keep watchdog slipping
+
+	    //cyhal_wdt_kick(&wdt_obj);	// keep watchdog slipping
 //	    cyhal_syspm_sleep();		// will be wake up by interrupts
 
     } /* end of endless loop */

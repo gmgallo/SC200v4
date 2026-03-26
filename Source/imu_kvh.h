@@ -16,19 +16,22 @@
  *KVH Data format
  *--------------------------------------*/
 
-typedef enum _Tag_Kvh
+typedef enum _Tag_Kvh 
 {
-	KVH_MSGHEADER = 0xFE81FF55,
+	//BE_KVH_HEADER725 = 0xFE81FF55,	// 4th byte is the record ID, 0x55 for IMU model 1725 IN BIG ENDIAN format.
+	LE_KVH_HEADER725 = 0x55FF81FE,		// Little Endian format. MSB is the last byte of the record, 0x55 for IMU model 1725. 
+	//BE_KVH_HEADER775 = 0xFE81FF56,	// 4th byte is the record ID, 0x56 for IMU model 1775 IN BIG ENDIAN format.
+	LE_KVH_HEADER775 = 0x56FF81FE,		// Little Endian format. MSB is the last byte of the record, 0x56 for IMU model 1775. 
 	KVH_EXTBITHDR = 0xFE8100AA,
 	KVH_EXBIT2HDR = 0xFE8100AB,
-	KVH_MSG_BYTE0 = 0xFE,			// BIG ENDIAN data format
+	KVH_MSG_BYTE0 = 0xFE,				// BIG ENDIAN BYTE ORDER
 	KVH_MSG_BYTE1 = 0x81,
 	KVH_MSG_BYTE2 = 0xFF,
 	KVH_MSG_BYTE3 = 0x55,
 
 } KVH_HEADERS;
 
-typedef struct
+typedef struct// ALL DATA IS RECEIVED IN BIG ENDIAN FORMAT
 {
 	uint32_t	header;		// 4 bytes
 	float		Xgyro;		// 4 bytes
@@ -44,7 +47,7 @@ typedef struct
 
 } kvh_msg_t, * PKVH_MSG;
 
-#define KVH_MSG_SIZE sizeof(kvh_msg_t)
+#define KVH_RECORD_SIZE sizeof(kvh_msg_t)
 
 
 

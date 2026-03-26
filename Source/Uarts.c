@@ -214,6 +214,7 @@ void Reconfig_Uart_Oem7700(uint32_t level, bauds_t bauds)
  *---------------------------------------------------------------------*/
 int32_t Uart_COM_Error = 0;
 bool    New_COM1_Message = false;
+bool    COM1_TX_Complete = true;
 
 /* Allocate context for UART operation */
 cy_stc_scb_uart_context_t uart_COM_Context;
@@ -251,7 +252,9 @@ void Process_COM_Message(uint8_t *buf, size_t cnt )
 
 void Isr_Uart_COM()
 {
-    if (0UL != (CY_SCB_RX_INTR & Cy_SCB_GetInterruptCause(UART_COM_HW)))
+	uint32_t cause = Cy_SCB_GetInterruptCause(UART_COM_HW);
+
+    if (0UL != (CY_SCB_RX_INTR & cause))
     {
 		uint32_t srcInterrupt = Cy_SCB_GetRxInterruptStatusMasked(UART_COM_HW);
 		uint32_t srcErr = (srcInterrupt & CY_SCB_UART_RECEIVE_ERR);
@@ -260,8 +263,6 @@ void Isr_Uart_COM()
 		if (0UL != srcErr )
 		{
 			Uart_COM_Error |= srcErr;
-
-//			Cy_SCB_ClearRxInterrupt(UART_COM_HW, srcErr);
 		}
 
 		/* service receive interrupts */
@@ -282,11 +283,25 @@ void Isr_Uart_COM()
 		/* clear only RX interrupts */
 		Cy_SCB_ClearRxInterrupt(UART_COM_HW, srcInterrupt );
     }
+	if (cause  & CY_SCB_TX_INTR)
+	{
+		uint32_t txInterrupt = Cy_SCB_GetTxInterruptStatusMasked(UART_COM_HW);
 
-    /* service transmit interrupts */
-    Cy_SCB_UART_Interrupt(UART_COM_HW, &uart_COM_Context);
+		if (txInterrupt & CY_SCB_UART_TX_EMPTY)
+		{
+			COM1_TX_Complete = true;
+		}
+	}
+	Cy_SCB_UART_Interrupt(UART_COM_HW, &uart_COM_Context);
 }
 
+void _uart_event_cb(uint32_t event)
+{
+	if (event & CY_SCB_UART_TRANSMIT_DONE_EVENT )
+	{
+		COM1_TX_Complete = true;
+	}
+}
 
 /****************************************************************************
 * PSOC_COM DCD Detect
@@ -332,10 +347,6 @@ void Init_COM1_DCD_Detect()
 {
 	/* Initialize the PSOC COM1 Detect Pin P9.3 */
 	Init_Input_Pin(PSOC_DCD, &dcd_detect_cb_data );
-
-	//cyhal_gpio_init(PSOC_DCD, CYHAL_GPIO_DIR_INPUT, CYHAL_GPIO_DRIVE_NONE, 0);
-	//cyhal_gpio_enable_event(PSOC_DCD, CYHAL_GPIO_IRQ_BOTH, CYHAL_ISR_PRIORITY_DEFAULT, true);
-	//cyhal_gpio_register_callback(PSOC_DCD, &dcd_detect_cb_data);
 }
 
 
@@ -350,10 +361,8 @@ int Init_Uart_COM_Port()
 		 Cy_SCB_UART_Enable(UART_COM_HW);
 	}
 
-//	 Cy_SCB_SetRxInterrupt (UART_COM_HW,CY_SCB_UART_RX_INTR);
-//   Cy_SCB_SetRxInterruptMask(UART_COM_HW, CY_SCB_UART_RX_INTR);
-
-	 Init_COM1_DCD_Detect();
+	Cy_SCB_UART_RegisterCallback(UART_COM_HW, _uart_event_cb, &uart_COM_Context);
+	Init_COM1_DCD_Detect();
 
 	return result;
 }
@@ -361,15 +370,17 @@ int Init_Uart_COM_Port()
 
 void Uart_COM_Send(uint8_t *txBuffer, size_t count)
 {
-	/* Blocking wait for transmission completion */
-	while (0UL != (CY_SCB_UART_TRANSMIT_ACTIVE & Cy_SCB_UART_GetTransmitStatus(UART_COM_HW, &uart_COM_Context)))
-	{
-	}
+	COM1_TX_Complete = false;
 
-	if ( count > 1)
-		Cy_SCB_UART_Transmit(UART_COM_HW, txBuffer, count, &uart_COM_Context);
-	else
-		Cy_SCB_UART_Put(UART_COM_HW, (uint32_t)(*txBuffer) );
+	Cy_SCB_UART_Transmit(UART_COM_HW, txBuffer, count, &uart_COM_Context);
+
+	while (COM1_TX_Complete == false)
+	;
+
+	/* Blocking wait for transmission completion */
+	// while (0UL != (CY_SCB_UART_TRANSMIT_ACTIVE & Cy_SCB_UART_GetTransmitStatus(UART_COM_HW, &uart_COM_Context)))
+	// {
+	// }
 }
 
 void Uart_COM_Putc(uint8_t c)
@@ -544,7 +555,15 @@ uint32_t Uart_IMU_Error = 0;
 #define IMU_TMP_BUFF  128
 uint8_t uartImuTmpBuf[IMU_TMP_BUFF];
 
-fnMessageProcessor _process_uart_imu_msg = Decode_FSAS_IMU_Data;
+
+static inline void Uart_IMU_WaitForTxComplete()
+{
+	while (0UL != (CY_SCB_UART_TRANSMIT_ACTIVE & Cy_SCB_UART_GetTransmitStatus(UART_IMU_HW, &uart_IMU_Context)))
+		;
+}
+
+
+fnMessageProcessor _process_uart_imu_msg = NULL;
 
 fnMessageProcessor SetImuMsgProcessor(fnMessageProcessor fn )
 {
@@ -590,8 +609,11 @@ void Isr_Uart_IMU(void)
 			{
 				uint32_t  numCopied = Cy_SCB_UART_GetArray(UART_IMU_HW, uartImuTmpBuf, ARRAY_SIZE(uartImuTmpBuf) );
 
+				fnMessageProcessor fn = _process_uart_imu_msg;
+
 				/* process received data */
-				_process_uart_imu_msg( uartImuTmpBuf, numCopied );
+				if(fn != NULL )
+					fn( uartImuTmpBuf, numCopied );
 			}
 
 #ifdef DEBUG_IMU_ISR
@@ -601,11 +623,9 @@ void Isr_Uart_IMU(void)
 
 		Cy_SCB_ClearRxInterrupt(UART_IMU_HW, srcInterrupt);
     }
-	else if (0UL != (CY_SCB_TX_INTR & InterruptCause))
-    {
+
     /* service transmit interrupts */
-     	Cy_SCB_UART_Interrupt(UART_IMU_HW, &uart_IMU_Context);
-	}
+   	Cy_SCB_UART_Interrupt(UART_IMU_HW, &uart_IMU_Context);
 }
 
 /*---------------------------------------------------------------------------
@@ -614,17 +634,19 @@ void Isr_Uart_IMU(void)
  *---------------------------------------------------------------------------*/
 typedef struct
 {
-	uint32_t Div;
-	uint32_t Frac;
-}_clk16_divider;
+	uint32_t Integer;
+	uint32_t Fractional;
+	uint32_t Oversample;
+}_clk_divider;
 
 
-_clk16_divider Oversample_16_ClkDividers[] = // dividers for 16.5 clocks
+_clk_divider Oversample_ClkDividers[] = // dividers for 16.5 clocks
 {
-	{ 54,  8 },		// 115200
-	{ 27,  4 },		// 230400
-	{ 13, 18 },		// 460800
-	{  6, 25 },		// 921600
+	{ 72, 16, 12 },		// 115200
+	{ 54,  8,  8 },		// 230400
+//	{ 15, 16, 14 },		// 460800
+	{ 14, 10, 14 },		// 460800 <<================ for debug only!
+	{  9,  1, 12 },		// 921600
 };
 
 
@@ -636,21 +658,24 @@ _clk16_divider Oversample_16_ClkDividers[] = // dividers for 16.5 clocks
  -----------------------------------------------------------------------*/
 bool _cycfg_Uart_IMU_clock(uint32_t div, uint32_t frac )
 {
-    Cy_SysClk_PeriphDisableDivider(CLK2X16_IMU_UART_HW, CLK2X16_IMU_UART_NUM);
-    Cy_SysClk_PeriphSetFracDivider(CLK2X16_IMU_UART_HW, CLK2X16_IMU_UART_NUM, div, frac);
-    Cy_SysClk_PeriphEnableDivider(CLK2X16_IMU_UART_HW, CLK2X16_IMU_UART_HW);
+    Cy_SysClk_PeriphDisableDivider(CLK_IMU_UART_HW, CLK_IMU_UART_NUM);
+    Cy_SysClk_PeriphSetFracDivider(CLK_IMU_UART_HW, CLK_IMU_UART_NUM, div, frac);
+    Cy_SysClk_PeriphEnableDivider(CLK_IMU_UART_HW, CLK_IMU_UART_NUM	);
 
     uint32_t _d,_f;
 
-    Cy_SysClk_PeriphGetFracDivider(CLK2X16_IMU_UART_HW, CLK2X16_IMU_UART_NUM, &_d, &_f);
+    Cy_SysClk_PeriphGetFracDivider(CLK_IMU_UART_HW, CLK_IMU_UART_NUM, &_d, &_f);
 
     return (div != _d || frac != _f);
 }
 
 void Set_Uart_IMU_Baudrate(bauds_t bauds)
 {
-	if (bauds >= B115200 && bauds <= B921600)
-		_cycfg_Uart_IMU_clock(Oversample_16_ClkDividers[bauds].Div, Oversample_16_ClkDividers[bauds].Frac);
+	if (bauds >= B115200 && bauds <= B921600) 
+	{
+		_cycfg_Uart_IMU_clock(Oversample_ClkDividers[bauds].Integer, Oversample_ClkDividers[bauds].Fractional);
+		_uart_IMU_Config.oversample = Oversample_ClkDividers[bauds].Oversample;
+	}
 }
 
 
@@ -678,23 +703,23 @@ int Init_Uart_IMU(bauds_t bauds)
 }
 
 /*-----------------------------------------------------------------------------------------------
- * Reconfig_Uart_IMU(uint32_t level)
+ * Reconfig_Uart_IMU(uint32_t record_length, bool enable)
  *
  * Changes the number of bytes in RX_FIFO that triggers an interrupt.
  * Returns: the previous level set.
- *
+ * record_length actual size -1. and must be <= 63 (RX FIFO size)
  *----------------------------------------------------------------------------------------------*/
 #ifdef UART_IMU_HW
 #define UART_IMU_CLK	PCLK_SCB4_CLOCK  // <---- MANUAL UPDATE NEEDED IF UART_IMU CHANGED TO ANOTHER SCB!!
 #endif
 
-uint32_t Reconfig_Uart_IMU(uint32_t level, bool enable)
+uint32_t Reconfig_Uart_IMU(uint32_t record_length, bool enable)
 {
 	 Cy_SCB_UART_Disable(UART_IMU_HW, &uart_IMU_Context);
 	 Cy_SCB_UART_DeInit(UART_IMU_HW);
 
 	 uint32_t old_level = _uart_IMU_Config.rxFifoTriggerLevel;
-	 _uart_IMU_Config.rxFifoTriggerLevel = level;
+	 _uart_IMU_Config.rxFifoTriggerLevel = record_length;
 
 	 Cy_SCB_UART_Init(UART_IMU_HW, &_uart_IMU_Config, &uart_IMU_Context);
 	 Cy_SCB_SetRxInterrupt(UART_IMU_HW,CY_SCB_UART_RX_INTR);
@@ -713,6 +738,12 @@ void Clear_Uart_IMU_Buffers(bool enable)
 		 Cy_SCB_UART_Enable(UART_IMU_HW);
 }
 
+void Disable_Uart_IMU_RX_Interrupt()
+{
+	 Cy_SCB_UART_Disable(UART_IMU_HW, &uart_IMU_Context);
+	 Cy_SCB_SetRxInterrupt(UART_IMU_HW,0);
+	 Cy_SCB_UART_Enable(UART_IMU_HW);
+}
 
 
 void Disable_Uart_IMU()
@@ -731,16 +762,14 @@ void Enable_Uart_IMU()
 
 void Uart_IMU_Send(uint8_t *txBuffer, size_t count)
 {
-	/* Blocking wait for previous transmission completion */
-	while (0UL != (CY_SCB_UART_TRANSMIT_ACTIVE & Cy_SCB_UART_GetTransmitStatus(UART_IMU_HW, &uart_IMU_Context)))
-		;
-
 	Cy_SCB_UART_Transmit(UART_IMU_HW, txBuffer, count, &uart_IMU_Context);
+	Uart_IMU_WaitForTxComplete();
 }
 
 void Uart_IMU_SendString(const char_t*string)
 {
     Cy_SCB_UART_PutString(UART_IMU_HW, string);
+	Uart_IMU_WaitForTxComplete();
 }
 
 /*---------------------------------------------------------------------------------*

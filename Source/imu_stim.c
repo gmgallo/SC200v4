@@ -30,9 +30,9 @@
 #ifdef DEBUG_STIM_TOV
 #define STIM_TOV_TP TP6
 #endif
-#ifdef DEBUG_STIM_BAUDSMON
+
 #define STIM_TOV_TP TP6
-#endif
+
 #endif
 
 
@@ -44,50 +44,6 @@ size_t   _stim_rec_count=0;
 
 uint8_t _stim_temp[STIM_BUFFER_SIZE];
 size_t  _stim_temp_count=0;
-
-
-
-/****************************************************************************
-* BAUDSMON PWM
-*
-* Generate accurate pulses on TP6 for the duration of # of bytes
-* Use to compare the actual baud rate received from the STIM300 device
-*****************************************************************************/
-#define BAUDSMON_INTR_PRIORITY  CYHAL_ISR_PRIORITY_DEFAULT // = 3
-#define BAUDSMON_TP	TP6
-bool baudsmon_init = false;
-
-void _bauds_monitor_Isr(void)
-{
-	  uint32_t interrupts = Cy_TCPWM_GetInterruptStatusMasked(BAUDSMON_HW, BAUDSMON_NUM);
-
-	/* Handle the compare event trigger */
-	if (0UL != (CY_TCPWM_INT_ON_CC & interrupts))
-	{
-
-#ifdef DEBUG_STIM_BAUDSMON
-		CLEAR_DEBUG_TP(BAUDSMON_TP);
-#endif
-	}
-	Cy_TCPWM_ClearInterrupt(BAUDSMON_HW, BAUDSMON_NUM, interrupts );
-}
-
-void InitBaudsMonitor()
-{
-	if (baudsmon_init)
-		return;
-
-    if (CY_TCPWM_SUCCESS != Cy_TCPWM_PWM_Init(BAUDSMON_HW, BAUDSMON_NUM, &BAUDSMON_config))
-    {
-        /* Handle possible errors */
-    }
-    /* Enable the initialized PWM */
-    Cy_TCPWM_PWM_Enable(BAUDSMON_HW, BAUDSMON_NUM);
-
-	ConfigureInterrupt(BAUDSMON_IRQ, BAUDSMON_INTR_PRIORITY, _bauds_monitor_Isr );
-
-	baudsmon_init = true;
-}
 
 /****************************************************************************
 * STIM IMU TOV Signal Detect
