@@ -72,7 +72,9 @@ void Uart_IMU_SendString(const char_t*string);
 //void Uart_IMU_WaitForTxComplete();
 
 void Set_Uart_IMU_Baudrate(bauds_t bauds);
-bool _cycfg_Uart_IMU_clock(uint32_t div, uint32_t frac);
+bool _cycfg_Uart_IMU_clock(uint32_t div, uint32_t frac, uint32_t oversample );
+void Sync_Uart_IMU(uint32_t record_length);
+void Disable_Uart_IMU_Watchdog();
 
 /*------------------------------------------------------------------
  * COM UART

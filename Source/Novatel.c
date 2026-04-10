@@ -68,6 +68,7 @@ static char * ImuTypeName[] =
 	"UNKNOWN",
 	"FSAS",
 	"STIM-300",
+	"KVH-1750",
 };
 
 
@@ -579,13 +580,13 @@ void SendStartLoggingMessages()
 
 
 /*-----------------------------------------------------------------------------
- * ComposeMark1Stobe() - Creates an EVENTOUT1 (MARK1) command
+ * ComposeMarkOutCommand() - Creates an EVENTOUT (MARK1 to MARK4) command
  *
  * mark - 1 to 4 for MARK1 to MARK4
  * freq = frequency in Hertz
- * uswdt = pulse width
- * polarty : true = Positive, false = Negative
- *
+ * uswdt = pulse width in microseconds
+ * polarty : true = Positive, false = Negative pulse
+ * 
  *----------------------------------------------------------------------------*/
 int ComposeMarkOutCommand(char* pbuf, size_t size, uint16_t mark, uint32_t freq, uint32_t uswdt, bool polarity)
 {
@@ -968,7 +969,7 @@ void UpdateGPTimeSync(void* vp)
  *  */
 #define POS_DECIMATOR 10
 
-uint poscounter = 0;
+uint32_t poscounter = 0;
 
 void UpdateBestPosition(void* vp)
 {

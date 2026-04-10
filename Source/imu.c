@@ -17,7 +17,8 @@
  * trigger via DAS signal:
  *
  * 2 byte CRC-CCITT (related to start value 0x0000, calculation over all bytes incl. sync; see Figure 8)
- * 1 byte package counter (unsigned integer) 3 x 4 byte angular increments (32 bit integer for 0,1,2; unit = 0.1/16 arcsec/LSB)
+ * 1 byte package counter (unsigned integer) 
+ * 3 x 4 byte angular increments (32 bit integer for 0,1,2; unit = 0.1/16 arcsec/LSB)
  * 3 x 3 byte velocity increments (24 bit integer for 0,1,2); unit = 0.05/16/215 m/s/LSB)
  * 4 byte odometer velocity (4 byte float); unit = counts / sample)
  * 4 byte odometer counter2 (32 bit long integer)
@@ -38,7 +39,7 @@
 /****************************************************************************
 *IMU GLOBALS
 *****************************************************************************/
-uint32_t imuFrequency = DEFAULT_IMU_FREQUENCY;
+volatile double IMU_Clock = DEFAULT_IMU_FREQUENCY;	// Default to 200Hz used when PSOC handles the IMU
 
 volatile bool IMU_online = false;
 volatile bool IMU_init = false;
@@ -46,11 +47,7 @@ volatile bool IMU_NoGo = false;
 
 volatile bool Enable_IMU_Logging = false;
 
-volatile double IMU_Clock = 200;	// Default to 200Hz used when PSOC handles the IMU
-
 bool DisableImuLogs = false;
-
-volatile double IMU_WeekSeconds;
 
 FSAS_Status volatile IMUStatus =
 {
@@ -64,6 +61,7 @@ FSAS_Status volatile IMUStatus =
 
 const tkeywrd_t ImuTypeList[] =
 {
+	{ "INVALID", IMUType_INVALID },
 	{ "FSAS", IMUType_FSAS },
 	{ "STIM", IMUType_STIM300 },
 	{ "KVH", IMUType_KVH },
@@ -177,13 +175,13 @@ void Init_IMU_NOGO_Detect()
 
 
 /****************************************************************************
- * Set_FSAS_Trigger_Frequency()
+ * Set_IMU_Trigger_Frequency()
  *
  *  - adjust the TDAS (strobe) frequency
  *  - also sets the MARK1 control in the NovAtel receiver.
  *
  ****************************************************************************/
-void Set_FSAS_Trigger_Frequency(uint32_t _frequency)
+void Set_IMU_Trigger_Frequency(uint32_t _frequency)
 {
 	char buf[100];
 
@@ -194,21 +192,18 @@ void Set_FSAS_Trigger_Frequency(uint32_t _frequency)
 	else if (_frequency < 1 )
 		_frequency = 1;
 
-	IMU_Clock = 200.0;
+	IMU_Clock = _frequency;
 
 	int j = ComposeMarkOutCommand(buf, ARRAY_SIZE(buf), 1, _frequency, 10, false);
 	Uart_Oem7700_Send((uint8_t*)buf,j);
-
-	imuFrequency = _frequency;
 }
 
-void Stop_FSAS_Trigger_Frequency()
+void Stop_IMU_Trigger_Frequency()
 {
 	char buf[100];
 	int j = ComposeMarkOutDisable(buf, ARRAY_SIZE(buf), 1);
 	Uart_Oem7700_Send((uint8_t*)buf,j);
-
-	imuFrequency = 0;
+	IMU_Clock = 0;
 }
 
 
@@ -221,38 +216,31 @@ bool Init_IMU_Interface(imu_type_t Type, imu_target_t Target)
 
 	PrintWithTime("Initializing IMU interface ...");
 
+	const char* type_str = GetImuTypeName(Type);
+	const char* target_str = GetImuConnectName(Target);
+
+	snprintf(buf,100,"IMU Type %s - Port: %s\n", type_str, target_str);
+	PrintWithTime( buf );
+
+	SpanStatus.ImuType = Type;
+
 	Set_IMU_COM_Target(Target);								// Novatel (w. SPAN) or PSOC (no SPAN)
 
 	if (Type == IMUType_FSAS )
 	{
-		Stop_FSAS_Trigger_Frequency();						// In case we have a warm restart
-
-		SpanStatus.ImuType = IMUType_FSAS;
-		IMU_Clock = 200.0;
-
+		Stop_IMU_Trigger_Frequency();						// In case we have a warm restart
 		Init_USec_Timer();									// TDAS event timing for IMU data timestamp
 		SetImuDataFormat(fmtNOVATEL_RAW);					// IMU data format reporting
 		SetImuMsgProcessor(Decode_FSAS_IMU_Data);			// Switch to IMU data decoding
-
 		Init_IMU_NOGO_Detect();								// GO/NOGO signal monitoring
-
-		snprintf(buf,100,"IMU Type FSAS - Port: %s\n", Target == Target_PSOC? "PSOC": "NOVATEL");
-		PrintWithTime( buf );
-
 		Init_Uart_IMU( B115200 );
-
-		Set_FSAS_Trigger_Frequency(DEFAULT_IMU_FREQUENCY);			// 200hz start IMU trigger
+		Set_IMU_Trigger_Frequency(DEFAULT_IMU_FREQUENCY);	// 200hz start IMU trigger
 
 		IMU_init = true;
 	}
 	else if (Type == IMUType_STIM300)			// STIM300 is handled by OEM7700 with SPAN firmware
 	{
-		snprintf(buf,100,"IMU Type STIM300 - Port: %s", Target == Target_PSOC? "PSOC": "NOVATEL\n");
-		PrintWithTime( buf );
-
 		Init_STIM_TOV_Detect( Target );
-
-		SpanStatus.ImuType = IMUType_STIM300;
 
 		IMU_Clock = 125.0;					// 125Hz
 
@@ -265,27 +253,16 @@ bool Init_IMU_Interface(imu_type_t Type, imu_target_t Target)
 			Init_Uart_IMU(B460800);
 
 			// to be implemented
-			PrintWithTime( "STIM300 handled by PSOC\n" );
+			PrintWithTime( "STIM300 handled by PSOC *** NOT IMPLEMENTEDD ***\n" );
 			SetImuMsgProcessor( Receive_STIM300_Datagram );		// Switch to IMU data decoding
 			Init_STIM_Framing = true;
 
-			IMU_init = true;
+			IMU_init = false;
 		}
 	}
 	else if(Type == IMUType_KVH)
 	{
-		snprintf(buf,100,"IMU Type KVH - Target: %s", Target == Target_PSOC? "PSOC": "NOVATEL\n");
-		PrintWithTime( buf );
-		
-		SpanStatus.ImuType = IMUType_KVH;
-
-		Init_Uart_IMU(B460800);
-
-		SetImuMsgProcessor( Receive_KVH_Datagram );		// Switch to IMU data decoding
-
-		IMU_Clock = 200.0;					// 200Hz
-
-		IMU_init = true;
+		IMU_init = Init_KVH_IMU();
 	}
 	else
 	{
@@ -382,17 +359,19 @@ void Set_IMU_Type(imu_type_t Type, bool save)
  ****************************************************************************/
 volatile uint16_t Last_HW_Error = 0;
 
-extern double ClockDif;
-extern double CountAdjust;
-
 size_t GetIMUStatusStr(char*buffer, size_t size)
 {
-	size_t cnt;
+	size_t cnt = 0;
+
 	if (SysConfig.imu_type == IMUType_STIM300)
 	{
 		cnt = GetSpanStatus(buffer, size);
 	}
-	else // FSAS IMU
+	else if (SysConfig.imu_type == IMUType_KVH)
+	{
+		cnt = GetKVHStatus(buffer, size);
+	}
+	else if (SysConfig.imu_type == IMUType_FSAS)// FSAS IMU
 	{
 		FSAS_Status S;
 
@@ -432,16 +411,21 @@ size_t GetIMUStatusShort(char*buffer, size_t size)
 	if (SysConfig.imu_type == IMUType_STIM300)
 	{
 		cnt = snprintf(buffer, size,"%d,%d,0,0,0,0,0,G,",
-				SpanStatus.ImuType, SpanStatus.Status);
+				(int)STIM300, SpanStatus.Status);
 	}
-	else // FSAS IMU
+	else if (SysConfig.imu_type == IMUType_FSAS)
+	{
+		cnt = GetKVHStatusShort(buffer, size);
+
+	}
+	else if (SysConfig.imu_type == IMUType_FSAS)
 	{
 		FSAS_Status S;
 
 		memcpy(&S, (FSAS_Status*)&IMUStatus, sizeof(FSAS_Status));
 
 		cnt = snprintf(buffer, size,"%d,%.4Xh,%.4Xh,%ld,%ld,%ld,%lu,%c,",
-				SpanStatus.ImuType,
+				(int)IMAR_FSAS,
 				S.IMU_Status,
 				S.HW_Error,
 				S.HW_ErrorCount,
@@ -454,6 +438,11 @@ size_t GetIMUStatusShort(char*buffer, size_t size)
 		IMUStatus.IMU_Status = 0;
 		IMUStatus.HW_Error = 0;
 	}
+	else
+	{
+		cnt = snprintf(buffer, size,"%d,0,0,0,0,0,0,G,", SpanStatus.ImuType);
+	}
+
 	return cnt;
 }
 
@@ -627,8 +616,6 @@ void Format_FSAS_SN_to_NovatelRawSX( PFSAS_SN_t psn )
 #else
 	_RawImuSX.imu_status = psn->Status;
 #endif
-
-	IMU_WeekSeconds = UsecEventTime.WeekSeconds;			// for status monitoring only
 
 	_RawImuSX.gnss_week    = UsecEventTime.GPSWeek;
 	_RawImuSX.week_seconds = UsecEventTime.WeekSeconds;		// a double in full seconds

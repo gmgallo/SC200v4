@@ -155,6 +155,7 @@ char *imuredir_cmd(char**, int, _ports_t);	// debug command
 char *imubauds_cmd(char**, int, _ports_t);	// debug command
 char *imu_record_size_cmd(char** , int , _ports_t );
 char *imu_console_cmd(char**, int, _ports_t);	// debug command
+char *imu_errors_cmd(char**, int, _ports_t);
 
 char *system_reset_cmd(char**, int, _ports_t);
 char *sysconfig_cmd(char**, int, _ports_t);
@@ -186,6 +187,7 @@ char *verbose_cmd(char**,int,_ports_t);
 
 char* release_timer_cmd(char** tokens, int cnt, _ports_t port);
 char* create_timer_cmd(char** tokens, int cnt, _ports_t port);
+char* clock_monitor_cmd(char** tokens, int cnt, _ports_t port);
 
 /*--------------------------------------------------------------------------- command dictionary */
 typedef struct
@@ -240,6 +242,8 @@ const fn_dictionary_t CmdDictionary[] =
 		{"STIMSTATUS",  stim_status},
 		{"IMURECSIZE",  imu_record_size_cmd},
 		{"IMUCONSOLE",  imu_console_cmd},
+		{"IMUERRORS",  imu_errors_cmd},
+		{"CLOCKMONITOR", clock_monitor_cmd},
 };
 
 /*----------------------------------------------------------------------------
@@ -1287,27 +1291,27 @@ char *imufreq_cmd(char**tokens, int cnt, _ports_t port)
 {
 	if (cnt < 2)
 	{
-		snprintf(CmdAnswer, ARRAY_SIZE(CmdAnswer),"IMUFREQ %ld\n", imuFrequency);
+		snprintf(CmdAnswer, ARRAY_SIZE(CmdAnswer),"IMUFREQ %lf\n", IMU_Clock);
 		return CmdAnswer;
 	}
 	int32_t freq;
 
 	if ( ToInt32(tokens[1], &freq) == 0 )
 	{
-		return PrintCmdError("Argument must be 0 to stop TDAS or between 50 and 200 Hz.");
+		return PrintCmdError("Argument must be 0 to stop TDAS or between 50 and 1000 Hz.");
 	}
 
-	if ( freq > MAX_IMU_FREQUENCY  || freq < 0  )
+	if ( freq > 1000  || freq < 0  )
 	{
-		return "Frequency out of range 0 <= f <= 200";
+		return "Frequency out of range 0 <= f <= 1000\n";
 	}
 	if (freq == 0)
 	{
-		Stop_FSAS_Trigger_Frequency();
+		Stop_IMU_Trigger_Frequency();
 	}
 	else
 	{
-		Set_FSAS_Trigger_Frequency(freq); // extend the period 20Hz to ensure sync with MARK1 time.
+		Set_IMU_Trigger_Frequency(freq); // extend the period 20Hz to ensure sync with MARK1 time.
 	}
 	return PrintCmdOK();
 }
@@ -2111,6 +2115,7 @@ char* test_forward_imu( char* port );
 char* test_bswap( _ports_t port );
 char* test_init_bit( _ports_t port );
 char* test_imu_pop( _ports_t port );
+char* Start_TDAS_Frequency(char**tokens, int cnt, _ports_t port );
 
 char *test_cmd(char**tokens, int cnt, _ports_t port)
 {
@@ -2125,6 +2130,7 @@ char *test_cmd(char**tokens, int cnt, _ports_t port)
 					"\tTEST 3 - STIM300 FORWARD TO PORT.\n"
 					"\tTEST 4 - Dequeue IMU Records.\n"
 					"\tTEST 5 - Enable INIT_BIT PPS Output.\n"
+					"\tTEST 6 - Start NovAtel TDAS Frequency.\n"
 					);
 
 			return buf;
@@ -2167,6 +2173,11 @@ char *test_cmd(char**tokens, int cnt, _ports_t port)
 			test_init_bit(port);
 			break;
 		}
+		case 6:
+		{
+			buf = Start_TDAS_Frequency(tokens, cnt, port);
+			break;
+		}
 
 		default:
 			snprintf(buf, size, "Incorrect test # [%ld]\n", t1);
@@ -2174,6 +2185,81 @@ char *test_cmd(char**tokens, int cnt, _ports_t port)
 	return buf;
 }
 
+
+
+/*----------------------------------------------- Compose Novatel MARTK1 Frequency  
+* Output on TP2 -> IMU TDAS output                                      
+*/
+char* Start_TDAS_Frequency(char**tokens, int cnt, _ports_t port )
+{
+	char buf[100];
+
+	if ( cnt < 3)
+	{
+		snprintf(CmdAnswer, sizeof(CmdAnswer), "\nUsage: TEST 6 frequency[0-1000] pulse_width[ms] [polarity[0-1]]\n");
+		return CmdAnswer;
+	}
+
+	bool _polarity = true;
+	uint32_t _frequency = 0, _pulse_width = 0;
+
+	if ( cnt >= 3)
+	{
+		uint32_t freq;
+		if ( ToUint32(tokens[2], &freq) == 0 )
+		{
+			return PrintCmdError("Invalid frequency parameter\n");
+		}
+		_frequency = freq;
+
+		if (_frequency == 0)
+		{
+			Stop_IMU_Trigger_Frequency();
+			int j = ComposeMarkOutDisable( buf, 100,1);
+			 Uart_Oem7700_Send((uint8_t*)buf,j);
+
+			return "TDAS Frequency Stopped\n";
+		}
+	}
+
+
+	if( cnt >= 4)
+	{
+		uint32_t pw;
+
+		if ( ToUint32(tokens[3], &pw) == 0 || pw < 1 )
+		{
+			return PrintCmdError("Invalid pulse width parameter\n");
+		}
+		_pulse_width = pw;
+	}
+
+	if (cnt >= 5)
+	{
+		int pol = find_binaryParam(tokens[4]);
+
+		if (pol == IS_ON || pol == IS_OFF)
+		{
+			_polarity = (pol == IS_ON);
+		}
+		else
+		{
+			return PrintCmdError("Invalid polarity parameter\n");
+		}
+	}
+
+	/* prevent out of valid range settings */
+
+	if (_frequency > 1000  )
+		_frequency = 1000;
+	else if (_frequency < 1 )
+		_frequency = 1;
+
+	int j = ComposeMarkOutCommand(buf, ARRAY_SIZE(buf), 1, _frequency, _pulse_width, _polarity);
+	Uart_Oem7700_Send((uint8_t*)buf,j);
+	snprintf(CmdAnswer, sizeof(CmdAnswer), "START TDAS Frequency %ld Hz, pulse width %ld ms, polarity %s\n", _frequency, _pulse_width, _polarity? "HIGH":"LOW");
+	return CmdAnswer;	
+}
 
 /*----------------------------------------------- TEST - IMU PORT LOOPBACK */
 
@@ -2272,7 +2358,7 @@ void ImuRedirMsgProcessor(uint8_t* buf, size_t cnt)
 	tbIndex =0;
 }
 
-/*----------------------------------------------------*/
+/*------------------------------------------------------------------------------------- IMUREDIR */
 
 char *imuredir_cmd(char**tokens, int cnt, _ports_t port)	// debug command
 {
@@ -2311,10 +2397,6 @@ char *imuredir_cmd(char**tokens, int cnt, _ports_t port)	// debug command
 
 	return CmdAnswer;
 }
-
-
-
-
 
 /****************************************************************************
 * BAUDSMON PWM
@@ -2362,8 +2444,50 @@ void TriggerBaudsMonitor(uint32_t compare)
 	Cy_TCPWM_TriggerReloadOrIndex(BAUDSMON_HW, (1UL << BAUDSMON_NUM));
 }
 
+/*------------------------------------------------------------------------------------- CLOCKMONITOR */
+void Start_ClockMonitor()
+{
+	if (CY_TCPWM_SUCCESS ==  Cy_TCPWM_PWM_Init(CLK_MONITOR_HW, CLK_MONITOR_NUM, &CLK_MONITOR_config) )
+	{
+		/* Enable the initialized PWM */
+		Cy_TCPWM_PWM_Enable(CLK_MONITOR_HW,CLK_MONITOR_NUM);
+		/* if not one shot start timer at once */
+		Cy_TCPWM_TriggerReloadOrIndex_Single(CLK_MONITOR_HW, CLK_MONITOR_NUM);
+		/* Handle possible errors */
+	}
+}
+
+void Stop_ClockMonitor()
+{
+	Cy_TCPWM_PWM_Disable(CLK_MONITOR_HW, CLK_MONITOR_NUM);
+	Cy_TCPWM_PWM_DeInit(CLK_MONITOR_HW, CLK_MONITOR_NUM, &CLK_MONITOR_config);
+}
+
+
+char* clock_monitor_cmd(char** tokens, int cnt, _ports_t port)
+{
+	if (cnt == 1)
+	{
+		return "Usage: CLOCKMONITOR [ON|OFF]\n"
+				"      Outputs a square wave frequency == PERICLCK/100 (1 MHz) on TP6\n";
+	}
+	action_t action = find_Action(tokens[1]);
+
+	if (action == ACTION_ON)
+	{
+		Start_ClockMonitor();
+		return "CLOCKMONITOR ON: 1MHz at TP6\n";
+	}
+	else if (action == ACTION_OFF)
+	{
+		Stop_ClockMonitor();
+		return "CLOCKMONITOR OFF\n";
+	}
+
+	return "Invalid arguments. Usage: CLOCKMONITOR [ON|OFF]\n";
+}
+
 /*----------------------------------------------------------------------- IMUBAUDS */
-bool _cycfg_Uart_IMU_clock(uint32_t div, uint32_t frac );
 
 typedef struct
 {
@@ -2374,7 +2498,7 @@ typedef struct
 
 _t_baud_name baud_names[] =
 {
-	{ 0, "CLOCK_DIV CLOCK_FRAC" },
+	{ 0, "CLOCK_DIV CLOCK_FRAC OVERSAMPLE" },
 	{ B115200, "115200"},
 	{ B230400, "230400"},
 	{ B460800, "460800"},
@@ -2396,17 +2520,19 @@ char *imubauds_cmd(char** tokens, int cnt, _ports_t port)	// debug command
 
 	ToInt32(tokens[1], &ndx);
 
-	if (ndx == 0 && cnt == 4)
+	if (ndx == 0 && cnt == 5)
 	{
 		uint32_t div;
 		uint32_t frac;
-
+		
 		ToUint32(tokens[2], &div);
 		ToUint32(tokens[3], &frac);
+		uint32_t oversample;
+		ToUint32(tokens[4], &oversample);
 
-		if ( _cycfg_Uart_IMU_clock(div, frac) == false )
+		if ( _cycfg_Uart_IMU_clock(div, frac, oversample) == false )
 		{
-			snprintf(CmdAnswer,  ARRAY_SIZE(CmdAnswer), "IMU clock adjusted %ld / %ld\n", div, frac );
+			snprintf(CmdAnswer,  ARRAY_SIZE(CmdAnswer), "IMU clock adjusted %ld / %ld Oversample: %ld\n", div, frac, oversample );
 		}
 		else
 		{
@@ -2452,6 +2578,7 @@ char *imubauds_cmd(char** tokens, int cnt, _ports_t port)	// debug command
 	return CmdAnswer;
 }
 
+/*------------------------------------------------------------------------------------- IMURECSIZE */
 char *imu_record_size_cmd(char** tokens, int cnt, _ports_t port)
 {
 	if (cnt >= 1)
@@ -2472,13 +2599,11 @@ char *imu_record_size_cmd(char** tokens, int cnt, _ports_t port)
 	}
 }
 
+/*------------------------------------------------------------------------------------- IMUCONSOLE */
 _ports_t consolePort;
 
 void ConsoletMsgProcessor(uint8_t* buf, size_t cnt)
 {
-	// memset(testBuf, 0, ARRAY_SIZE(testBuf) );
-	// memcpy(testBuf, buf, MIN(cnt,MAX_TEST_BUF));
-	// printf("IMU message: %d chars [%s]\n", cnt, testBuf );
 	SendToPort(consolePort, buf, cnt);	
 	while(cnt-- > 0)
 	{
@@ -2495,7 +2620,6 @@ void LeaveConsole()
 	}
 }
 
-
 char *imu_console_cmd(char**tokens, int cnt, _ports_t port)
 {
 	consolePort = port;
@@ -2511,9 +2635,18 @@ char *imu_console_cmd(char**tokens, int cnt, _ports_t port)
 	}
 	else
 	{
-		return "IMU Console only available for KVH\n";
+		return "IMU Console not available for this IMU type\n";
 	}
 }
+
+/*------------------------------------------------------------------------------------- IMUERRORS */
+char *imu_errors_cmd(char**, int, _ports_t)
+{
+	GetUartErrorStr(CmdAnswer, sizeof(CmdAnswer), Uart_IMU_Error);
+	Uart_IMU_Error = 0;
+	return CmdAnswer;
+}
+
 
 /*====================================================================== STIM300 TEST */
 

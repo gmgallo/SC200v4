@@ -51,9 +51,11 @@ extern volatile bool PPS_Counter_Error;		// True if init not possible
 extern volatile bool PPS_SOW_InSync;		// True when the counter has true SOW count
 extern volatile uint32_t PPS_WeekSeconds;	// full week seconds updated by PPS pulse
 
+extern volatile double ClockDif;
+extern volatile double CountAdjust;
+
 void Set_PPS_Counter(uint32_t count);
 void Init_PPS_Counter();
-uint32_t Get_SecondsOfTheWeek000();			// returns the GPS Seconds of the week (no fractions
 
 extern volatile uint32_t GPS_WeekSeconds;
 inline bool IsGpsTimeInSync() { return PPS_WeekSeconds == GPS_WeekSeconds; }

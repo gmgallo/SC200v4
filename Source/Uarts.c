@@ -64,17 +64,29 @@ int GetUartErrorStr(char* buf, int cnt, uint32_t err)
 {
 	memset(buf,0, cnt);
 	int j = 0;
+	int n =0;
+
+	j += snprintf(buf,cnt, "UART Errors:");
 
 	if ( (err & CY_SCB_RX_INTR_OVERFLOW) != 0 )
-		j += snprintf(buf,cnt, "%s", " RX_OVERFLOW");
+	{	
+		j += snprintf(buf+j,cnt-j, "%s", " RX_OVERFLOW"); 
+		n++;
+	}
 
 	if ( (err & CY_SCB_RX_INTR_UART_FRAME_ERROR) != 0 )
+	{
 		j += snprintf(buf+j,cnt-j, "%s", " RX_FRAME_ERROR");
+		n++;
+	}
 
 	if ( (err & CY_SCB_RX_INTR_UART_PARITY_ERROR) != 0 )
+	{
 		j += snprintf(buf+j,cnt-j, "%s", " RX_PARITY_ERROR");
-	if (j == 0)
-		j += snprintf(buf,cnt, "NO RX Errors");
+		n++;
+	}
+
+	j += snprintf(buf+j, cnt-j, " %d RX Errors\n", n	);
 
 	return j;
 }
@@ -541,7 +553,7 @@ void Uart_GPS_Send(uint8_t *txBuffer, size_t count)
 /*---------------------------------------------------------------------
  * UART IMU - IMU DATA IN
  *-----------------------------------------------------------------
- * UART_IMU           | 115200,N,8,1  |  SCB4 - RX/TX P8.0/P8.1   |
+ * UART_IMU        | Bauds adjustable |  SCB4 - RX/TX P8.0/P8.1   |
  *-----------------------------------------------------------------
  *---------------------------------------------------------------------*/
 /* Allocate context for UART operation */
@@ -560,6 +572,15 @@ static inline void Uart_IMU_WaitForTxComplete()
 {
 	while (0UL != (CY_SCB_UART_TRANSMIT_ACTIVE & Cy_SCB_UART_GetTransmitStatus(UART_IMU_HW, &uart_IMU_Context)))
 		;
+}
+
+
+static inline void Kick_Uart_IMU_Watchdog()
+{
+#ifdef DEBUG_IMU_ISR
+	SET_DEBUG_TP(TP7);
+#endif
+	Cy_TCPWM_TriggerReloadOrIndex(IMU_WATCHDOG_HW, (1UL << IMU_WATCHDOG_NUM));
 }
 
 
@@ -587,6 +608,8 @@ void Isr_Uart_IMU(void)
 #ifdef DEBUG_IMU_ISR
    	SET_DEBUG_TP(UART_IMU_TP);		// Break detect
 #endif
+		Kick_Uart_IMU_Watchdog();
+
      	uint32_t srcInterrupt =  Cy_SCB_GetRxInterruptStatusMasked(UART_IMU_HW);
 
     	if ((srcInterrupt & CY_SCB_RX_INTR_UART_BREAK_DETECT) != 0UL )
@@ -607,13 +630,23 @@ void Isr_Uart_IMU(void)
 
     		if (0UL != ( srcInterrupt & (CY_SCB_UART_RX_NOT_EMPTY|CY_SCB_RX_INTR_LEVEL|CY_SCB_RX_INTR_FULL|CY_SCB_RX_INTR_OVERFLOW)) )
 			{
-				uint32_t  numCopied = Cy_SCB_UART_GetArray(UART_IMU_HW, uartImuTmpBuf, ARRAY_SIZE(uartImuTmpBuf) );
+				uint32_t numInFifo = Cy_SCB_UART_GetNumInRxFifo(UART_IMU_HW);
+				uint32_t numReceived =Cy_SCB_UART_GetNumReceived(UART_IMU_HW, &uart_IMU_Context);
+				uint32_t numToRead = (numInFifo > numReceived)? numInFifo : numReceived;
+
+				if (numToRead > 0)
+				{
+
+				uint32_t  numCopied = Cy_SCB_UART_GetArray(UART_IMU_HW, uartImuTmpBuf, numToRead );
+
+//				uint32_t  numCopied = Cy_SCB_UART_GetArray(UART_IMU_HW, uartImuTmpBuf, ARRAY_SIZE(uartImuTmpBuf) );
 
 				fnMessageProcessor fn = _process_uart_imu_msg;
 
 				/* process received data */
 				if(fn != NULL )
 					fn( uartImuTmpBuf, numCopied );
+				}
 			}
 
 #ifdef DEBUG_IMU_ISR
@@ -634,19 +667,19 @@ void Isr_Uart_IMU(void)
  *---------------------------------------------------------------------------*/
 typedef struct
 {
+	bauds_t  Baud;
 	uint32_t Integer;
 	uint32_t Fractional;
 	uint32_t Oversample;
 }_clk_divider;
 
 
-_clk_divider Oversample_ClkDividers[] = // dividers for 16.5 clocks
+_clk_divider clockDividers[] = // dividers for 16.5 clocks
 {
-	{ 72, 16, 12 },		// 115200
-	{ 54,  8,  8 },		// 230400
-//	{ 15, 16, 14 },		// 460800
-	{ 14, 10, 14 },		// 460800 <<================ for debug only!
-	{  9,  1, 12 },		// 921600
+	{ B115200, 16, 12, 16 },		// 115200
+	{ B230400, 54,  8,  8 },		// 230400
+	{ B460800, 14, 14, 14 },		// 460800
+	{ B921600, 6, 20, 14 },		// 921600 <<================ for debug
 };
 
 
@@ -656,12 +689,12 @@ _clk_divider Oversample_ClkDividers[] = // dividers for 16.5 clocks
  * uartscbclk - Is not defined in chcfg_peripherals.
  * It must be manually named in Device Configurator
  -----------------------------------------------------------------------*/
-bool _cycfg_Uart_IMU_clock(uint32_t div, uint32_t frac )
+bool _cycfg_Uart_IMU_clock(uint32_t div, uint32_t frac, uint32_t oversample )
 {
     Cy_SysClk_PeriphDisableDivider(CLK_IMU_UART_HW, CLK_IMU_UART_NUM);
     Cy_SysClk_PeriphSetFracDivider(CLK_IMU_UART_HW, CLK_IMU_UART_NUM, div, frac);
     Cy_SysClk_PeriphEnableDivider(CLK_IMU_UART_HW, CLK_IMU_UART_NUM	);
-
+	_uart_IMU_Config.oversample = oversample;
     uint32_t _d,_f;
 
     Cy_SysClk_PeriphGetFracDivider(CLK_IMU_UART_HW, CLK_IMU_UART_NUM, &_d, &_f);
@@ -671,10 +704,13 @@ bool _cycfg_Uart_IMU_clock(uint32_t div, uint32_t frac )
 
 void Set_Uart_IMU_Baudrate(bauds_t bauds)
 {
-	if (bauds >= B115200 && bauds <= B921600) 
+	for(size_t i=0; i < ARRAY_SIZE(clockDividers); i++)
 	{
-		_cycfg_Uart_IMU_clock(Oversample_ClkDividers[bauds].Integer, Oversample_ClkDividers[bauds].Fractional);
-		_uart_IMU_Config.oversample = Oversample_ClkDividers[bauds].Oversample;
+		if ( clockDividers[i].Baud == bauds )
+		{
+			_cycfg_Uart_IMU_clock(clockDividers[i].Integer, clockDividers[i].Fractional, clockDividers[i].Oversample);
+			_uart_IMU_Config.oversample = clockDividers[i].Oversample;
+		}
 	}
 }
 
@@ -702,6 +738,71 @@ int Init_Uart_IMU(bauds_t bauds)
 	 return result;
 }
 
+/*----------------------------------------------------------------------------
+ * UART IMU Watchdog
+ *
+ * A single shot to synchronize the UART IMU win the start of the IMU record.
+ * The sync procedure is to start the UART with fifo level 0, so its ISR is
+ * triggered byte by byte. 
+ * The Compare value of this wastchdog must be set to a few bytes.
+ * when it triggers it is in the time gap between records.
+ *----------------------------------------------------------------------------*/
+uint32_t Imu_RX_FIFO_Level = 0;
+bool imu_watchdog_sync = false;
+bool imu_watchdog_init = false;
+
+void _imu_watchdog_isr(void)
+{
+	uint32_t interrupts = Cy_TCPWM_GetInterruptStatusMasked(IMU_WATCHDOG_HW, IMU_WATCHDOG_NUM);
+
+	/* Handle the compare event trigger */
+	if (0UL != (CY_TCPWM_INT_ON_CC & interrupts))
+	{
+		if( !imu_watchdog_sync )
+		{
+			imu_watchdog_sync = true;
+
+			Cy_SCB_UART_ClearRxFifo(UART_IMU_HW);	
+			uint32_t status = Cy_SCB_UART_GetRxFifoStatus(UART_IMU_HW); // clear status flags
+			Cy_SCB_UART_ClearRxFifoStatus(UART_IMU_HW, status);
+
+			Reconfig_Uart_IMU(Imu_RX_FIFO_Level, true);
+		}
+#ifdef DEBUG_IMU_ISR
+		CLEAR_DEBUG_TP(TP7);
+#endif
+	}
+
+	Cy_TCPWM_ClearInterrupt(IMU_WATCHDOG_HW, IMU_WATCHDOG_NUM, interrupts );
+}
+
+void Init_Uart_IMU_Watchdog(uint32_t bytes)
+{
+    if (CY_TCPWM_SUCCESS == Cy_TCPWM_PWM_Init(IMU_WATCHDOG_HW, IMU_WATCHDOG_NUM, &IMU_WATCHDOG_config))
+    {
+		uint32_t compare = UART_IMU_config.oversample * 10 * bytes; // total clock pulses for # of bytes
+		Cy_TCPWM_PWM_SetCompare0Val(IMU_WATCHDOG_HW, IMU_WATCHDOG_NUM, compare);
+		Cy_TCPWM_PWM_Enable(IMU_WATCHDOG_HW, IMU_WATCHDOG_NUM);
+		ConfigureInterrupt(IMU_WATCHDOG_IRQ, UART_IMU_IRQ_PRIORITY-1, _imu_watchdog_isr); 
+		imu_watchdog_init = true;
+	}
+}
+
+void Sync_Uart_IMU(uint32_t record_length)
+{
+	Imu_RX_FIFO_Level = record_length-1; // IMU RX wiill trigger ISR with the last byte of the record.
+	imu_watchdog_sync = false;
+
+	if ( !imu_watchdog_init )
+		Init_Uart_IMU_Watchdog(4);
+
+	Reconfig_Uart_IMU(0, true);
+}
+void Disable_Uart_IMU_Watchdog()
+{
+	Cy_TCPWM_PWM_Disable(IMU_WATCHDOG_HW, IMU_WATCHDOG_NUM);
+	imu_watchdog_sync = false;
+}
 /*-----------------------------------------------------------------------------------------------
  * Reconfig_Uart_IMU(uint32_t record_length, bool enable)
  *

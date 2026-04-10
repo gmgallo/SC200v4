@@ -25,6 +25,8 @@ extern volatile bool IMU_init;
 extern volatile bool IMU_NoGo;
 extern volatile bool Enable_IMU_Logging;
 
+extern volatile double IMU_Clock;
+
 typedef enum
 {
 	IMUType_INVALID = 0,
@@ -92,18 +94,18 @@ void Store_IMU_COM_Target(imu_target_t target);
 void Set_IMU_COM_Target(imu_target_t Target);		// Select where to connect the IMU data
 
 /****************************************************************************
- * Set_FSAS_Trigger_Frequency() - FSAS ONLY
+ * Set_IMU_Trigger_Frequency() - IMU trigger output control
  *
  * SC200 - Uses OEM7700 Mark1 out to supply TDAS trigger.
  *
  ****************************************************************************/
-void Set_FSAS_Trigger_Frequency(uint32_t _frequency);
-void Stop_FSAS_Trigger_Frequency();
+void Set_IMU_Trigger_Frequency(uint32_t _frequency);
+void Stop_IMU_Trigger_Frequency();
 
 
-#define MIN_IMU_FREQUENCY	  (100U)	// 100 Hertz min frequency without IMU errors
-#define MAX_IMU_FREQUENCY	  (200U)	// 200 Hertz (5 ms period @115.2k baud)
-#define DEFAULT_IMU_FREQUENCY (200U)	// For startup
+#define MIN_IMU_FREQUENCY	  (100U)	// 100 Hertz min frequency without FSAS IMU errors
+#define MAX_IMU_FREQUENCY	  (1000U)	// 1000 Hertz (1 ms period for 921600 baud) max frequency without IMU errors
+#define DEFAULT_IMU_FREQUENCY (200U)	// Standard 200Hz frequency for IMU trigger output and data reporting
 
 typedef enum
 {
