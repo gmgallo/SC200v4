@@ -14,11 +14,15 @@
 #include "globaldefs.h"
 
 /*-----------------------------------------------------------------
- * USec_Timer - Microsecond timer to capture TDAS events time
+ * USec_Timer - Microsecond timer to capture Imu trigger (TDAS) events
  *
  * The event time is recorded a few microseconds after the trigger
  * signal. It will be ready to use long before the IMU data
  * completed transmission and is decoded.
+ * 
+ * With IMU triggered by Novatel Event out 1 the time tagging 
+ * is very accurate and we use IMU Trigger Monitor instead to 
+ * time tag the IMU records.
  *----------------------------------------------------------------*/
 typedef struct tevent_time
 {
@@ -31,27 +35,21 @@ typedef struct tevent_time
 
 extern volatile event_time_t UsecEventTime;
 
-void Init_USec_Timer();
-void Set_Event_Time_Report(event_time_t *ptime);
+void Init_IMU_Trigger_Monitor(double _imu_clock);	// use this to time tag IMU records triggered by Novatel Event out 1 (200Hz)
+
+void Init_USec_Timer();				// use this to time tag IMU records triggered internally uusing TOV signal.
+
+void Set_Event_Time_Report(event_time_t *ptime); // Optional to time tag other records with the same event time as IMU records.
 
 
-/*-------------------------------------------------------------------------
- * 	PPS Counter	- TCPMW[0].5
- *
- *	- Configured as event counter, increments the count with each PPS raising edge.
- *	- The counter is preset to the Seconds of the Week (Week Time) by a
- *	  callback from Novatel data decoder.
- *	- The period is set to (604800-1) which is the total # of seconds in a week
- *	- A timer overflow signs the start of a new GPS week.
- *	- The interrurpt on overflow increments the GPS week in case the equipment
- *	- is running at Sunday midnight of GPS time.
- *
- *--------------------------------------------------------------------------*/
+/*-------------------------------------------------------------------------*
+ * PPS and week seconds for time tagging and PPS monitor 
+ *-------------------------------------------------------------------------*/
 extern volatile bool PPS_Counter_Error;		// True if init not possible
 extern volatile bool PPS_SOW_InSync;		// True when the counter has true SOW count
 extern volatile uint32_t PPS_WeekSeconds;	// full week seconds updated by PPS pulse
 
-extern volatile double ClockDif;
+extern volatile double ClockDif;			// maintained byt Usec_Timer ISR to adjust the clock drift against the receiver.
 extern volatile double CountAdjust;
 
 void Set_PPS_Counter(uint32_t count);
@@ -61,7 +59,7 @@ extern volatile uint32_t GPS_WeekSeconds;
 inline bool IsGpsTimeInSync() { return PPS_WeekSeconds == GPS_WeekSeconds; }
 
 /*---------------------------------------------
- * TDAS - IMU strobe signal
+ * TDAS - IMU Trigger strobe signal
  *--------------------------------------------*/
 void Init_TDAS_PWM();
 bool SetTDASStrobeFrequency(uint32_t _timer_frequency);

@@ -217,6 +217,7 @@ typedef struct tTxINS
 #define IMU_RECORD_SIZE  			(MAX(MAX(sizeof(RAWIMUSX_t),sizeof(FSAS_SN_t)),sizeof(TxINS_t)))
 #define IMU_RECORD_STORE_COUNT 300	/* 1.5 second of roundrobin IMU records storage @ 200Hz ~16k */
 
+extern volatile bool DisableImuLogs;
 
 #pragma pack(pop)
 

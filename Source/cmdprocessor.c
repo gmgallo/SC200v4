@@ -7,6 +7,7 @@
  *      Author: Guillermo
  */
 #include "common.h"
+#include "cy_pdl.h"
 
 /*--------------------------------------------------------------- PORTS*/
 typedef struct
@@ -181,7 +182,7 @@ char* genoutput_cmd(char** tokens, int cnt, _ports_t port);
 char *echo2_cmd(char**, int, _ports_t);
 
 char *test_cmd(char**,int,_ports_t);
-char *disableIMULog_cmd(char**,int,_ports_t);
+char *imu_log_cmd(char**,int,_ports_t);
 
 char *verbose_cmd(char**,int,_ports_t);
 
@@ -224,17 +225,17 @@ const fn_dictionary_t CmdDictionary[] =
 		{"WRITEPIN",  		set_pin_cmd},			// SET port pin high or low
 		{"PULSEPIN",  		pulse_pin_cmd},			// Pulse port pin
 		{"READPIN", 		read_pin_cmd},			// read port pin
-		{"MONITORPIN", 		monitor_pin_cmd},			// read port pin
+		{"MONITORPIN", 		monitor_pin_cmd},		// read port pin
 		{"CANCELPINMONITOR",cancel_pin_monitor_cmd},
 
 		/* debug commands */
 		{"VERBOSE",  	verbose_cmd},			// Echo all commands and answer to the console.
-		{"GENOUTPUT",   genoutput_cmd },			// generates a n output of n bytes with crc16
-		{"ECHO2",       echo2_cmd	},					// Echoes back what's received by the port
-		{"GNSSLOG",     gnss_log_cmd}, 				// enables (default) / disables GNSS logs to be sent with IMU logs
+		{"GENOUTPUT",   genoutput_cmd },		// generates a n output of n bytes with crc16
+		{"ECHO2",       echo2_cmd	},			// Echoes back what's received by the port
+		{"GNSSLOGS",    gnss_log_cmd}, 			// enables (default) / disables GNSS logs to be sent with IMU logs
+		{"IMULOGS", 	imu_log_cmd},			// To receive GNSS logs only
 		{"BENCHMARK",	benchmark_cmd},  		// executes several benchmarks
 		{"TEST",		test_cmd },				// executes several test commands
-		{"DISABLEIMULOG", disableIMULog_cmd},	// To receive GNSS logs only
 		{"CREATETIMER", create_timer_cmd},
 		{"RELEASETIMER", release_timer_cmd},
 		{"IMUREDIR",     imuredir_cmd},
@@ -592,8 +593,8 @@ void ProcessAsyncMessages() // serviced by the main loop
 
 		async_message_count--;
 	}
-
 }
+
 void PostAssyncMessage(uint8_t *buf, int cnt, _ports_t receiver)
 {
 	if (async_message_count < MAX_ASYNC_MESSAGES)
@@ -1454,6 +1455,8 @@ char *imuconnect_cmd(char** tokens, int cnt, _ports_t port)
  * 		port		- The log target port. Default the calling port
  * 		action		- START or STOP (defaults to no arguments behavior)
  */
+bool default_IMU_Logging = true;
+bool default_GNSS_Logging = true;
 
 char *log_cmd(char**tokens, int cnt, _ports_t port)
 {
@@ -1496,11 +1499,11 @@ char *log_cmd(char**tokens, int cnt, _ports_t port)
 
 		SET_BITS(LoggingPort, target);
 
-		Enable_GNSS_Logging = true;
+		Enable_GNSS_Logging = default_GNSS_Logging;
 		SendStartLoggingMessages();
 
 		GPTimerDelay(1500);
-		Enable_IMU_Logging = true;
+		Enable_IMU_Logging = default_IMU_Logging;
 
 		printf("[%s] Starting log to port %s\n", GetUpTimeStr(),GetPortName(target) );
 	}
@@ -1518,6 +1521,59 @@ char *log_cmd(char**tokens, int cnt, _ports_t port)
 
 	// Do not echo if logging to same port
 	return (target != port)? PrintCmdOK(): NULL;
+}
+
+/*------------------------------------------------------------------------------------ GNSSLOGS
+ * Command format:
+ *
+ *	GNSSLOG ENABLE | DISABLE
+ *
+ *	For IMU debug purposes, to log IMU records alone.
+ */
+char *gnss_log_cmd(char**tokens, int cnt,  _ports_t port)
+{
+	if (cnt > 1)
+	{
+		action_t action = find_Action(tokens[1]);
+
+		if (action == ACTION_ENABLE || action == ACTION_DISABLE)
+		{
+			default_GNSS_Logging = (action == ACTION_ENABLE);
+		//	SaveConfig(&SysConfig);
+		}
+		else
+		{
+			return "Usage: GNSSLOGS [ENABLE | DISABLE]\n";
+		}
+	}
+
+	return (default_GNSS_Logging == true)? "GNSSLOGS are ENABLED\n" : "GNSSLOGS are DISABLED\n";
+}
+
+
+/*---------------------------------------------------------------------------------- IMULOG 
+ * Command format:
+ *
+ *	IMULOG ENABLE | DISABLE
+ *
+ *	For IMU debug purposes, to log GNSS records alone.
+ */
+char *imu_log_cmd(char**tokens, int cnt,  _ports_t port)
+{
+	if (cnt > 1)
+	{
+		action_t action = find_Action(tokens[1]);
+
+		if (action == ACTION_ON || action == ACTION_OFF)
+		{
+			default_IMU_Logging = (action == ACTION_ON);
+		}
+		else
+		{
+			return "Usage: IMULOGS [ON | OFF]\n";
+		}
+	}
+	return ( default_IMU_Logging == true)? "IMULOGS are ON\n" :  "IMULOGS are OFF\n";
 }
 
 
@@ -1657,12 +1713,12 @@ char *map_ladybug_report_cmd(char** tokens, int cnt, _ports_t port)
 char *request_gps_log_cmd(char** tokens, int cnt, _ports_t port)
 {
 	if (cnt < 2)
-		return "Missing argument.\n";
+		return "Usage: REQUESTGPSLOG <novatel_log_command>\n";
 
 	if ( RequestGpsLog(tokens[1]) )
-			return PrintCmdError("Invalid LOG format.\n");
+		return PrintCmdError("Invalid NOVATEL LOG format.\n");
 
-		return PrintCmdOK();
+	return PrintCmdOK();
 }
 
 /*----------------------------------------------------------------------------------- SYSCONFIG */
@@ -1676,54 +1732,6 @@ char *sysconfig_cmd(char** tokens, int cnt, _ports_t port)
 	return PrintCmdOK();
 }
 
-/*------------------------------------------------------------------------------------ GNSSLOG
- * Command format:
- *
- *	GNSSLOG ENABLE | DISABLE
- *
- *	For IMU debug purposes, to log IMU records alone.
- */
-char *gnss_log_cmd(char**tokens, int cnt,  _ports_t port)
-{
-	if (cnt > 1)
-	{
-		action_t action = find_Action(tokens[1]);
-
-		if (action == ACTION_ENABLE || action == ACTION_DISABLE)
-		{
-			SysConfig.no_com2_logs_init = (action == ACTION_DISABLE);
-			SaveConfig(&SysConfig);
-		}
-		else
-		{
-			return "Valid arguments are: ENABLE , DISABLE\n";
-		}
-	}
-
-	return (SysConfig.no_com2_logs_init == false)? "GNSS_LOG_INIT ENABLED\n" : "GNSS_LOG_INIT DISABLED\n";
-}
-
-
-extern bool DisableImuLogs;
-
-char *disableIMULog_cmd(char**tokens, int cnt,_ports_t port)
-{
-	if (cnt > 1)
-	{
-		action_t action = find_Action(tokens[1]);
-
-		if (action == ACTION_ON || action == ACTION_OFF)
-		{
-			DisableImuLogs = (action == ACTION_ON);
-			SaveConfig(&SysConfig);
-		}
-		else
-		{
-			return "Valid arguments are: ON , OFF\n";
-		}
-	}
-	return ( DisableImuLogs == false)? "DISABLEIMULOGS is OFF\n" :  "DISABLEIMULOGS is ON\n";
-}
 
 
 /*-----------------------------------------------------------------------------------------
@@ -2445,12 +2453,44 @@ void TriggerBaudsMonitor(uint32_t compare)
 }
 
 /*------------------------------------------------------------------------------------- CLOCKMONITOR */
+cy_stc_tcpwm_pwm_config_t _clk_monitor_config;
+
+#define CLK_MONITOR_CLOCK PCLK_TCPWM1_CLOCKS21 // Peripheral clock for the TCPWM[1] counter[21]
+
+bool Init_ClockMonitor(uint32_t clk_hw, uint32_t clk_num, bool continuous)
+{
+	memcpy(&_clk_monitor_config, &CLK_MONITOR_config, sizeof(cy_stc_tcpwm_pwm_config_t) );
+	uint32_t pwmode = continuous? CY_TCPWM_PWM_CONTINUOUS : CY_TCPWM_PWM_ONESHOT;
+
+	_clk_monitor_config.pwmMode = pwmode;
+
+		 // Re-initialize with new mode
+	if(	 CY_TCPWM_SUCCESS == Cy_TCPWM_PWM_Init(CLK_MONITOR_HW, CLK_MONITOR_NUM, &_clk_monitor_config))
+	{
+		Cy_GPIO_Pin_FastInit(TP6_PORT, TP6_PORT_NUM, CY_GPIO_DM_STRONG,	0, TP6_HSIOM);   // HSIOM selection for PWM line
+	    Cy_SysClk_PeriphAssignDivider(CLK_MONITOR_CLOCK, clk_hw, clk_num);
+		Cy_TCPWM_PWM_Enable(CLK_MONITOR_HW,CLK_MONITOR_NUM);
+		return true;
+	}
+
+	return false;
+	
+}
+
+void DeInit_ClockMonitor()
+{
+	Cy_TCPWM_PWM_Disable(CLK_MONITOR_HW, CLK_MONITOR_NUM);
+	Cy_TCPWM_PWM_DeInit(CLK_MONITOR_HW, CLK_MONITOR_NUM, &_clk_monitor_config);
+	
+	Cy_GPIO_Pin_FastInit(TP6_PORT, TP6_PORT_NUM, CY_GPIO_DM_STRONG, 0, HSIOM_SEL_GPIO);  // HSIOM selection back t GPIO
+	
+}
+
+
 void Start_ClockMonitor()
 {
-	if (CY_TCPWM_SUCCESS ==  Cy_TCPWM_PWM_Init(CLK_MONITOR_HW, CLK_MONITOR_NUM, &CLK_MONITOR_config) )
+	if (Init_ClockMonitor(CLK6_100MHZ_HW, CLK6_100MHZ_NUM, true) )
 	{
-		/* Enable the initialized PWM */
-		Cy_TCPWM_PWM_Enable(CLK_MONITOR_HW,CLK_MONITOR_NUM);
 		/* if not one shot start timer at once */
 		Cy_TCPWM_TriggerReloadOrIndex_Single(CLK_MONITOR_HW, CLK_MONITOR_NUM);
 		/* Handle possible errors */
@@ -2459,8 +2499,7 @@ void Start_ClockMonitor()
 
 void Stop_ClockMonitor()
 {
-	Cy_TCPWM_PWM_Disable(CLK_MONITOR_HW, CLK_MONITOR_NUM);
-	Cy_TCPWM_PWM_DeInit(CLK_MONITOR_HW, CLK_MONITOR_NUM, &CLK_MONITOR_config);
+	DeInit_ClockMonitor();
 }
 
 

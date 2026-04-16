@@ -74,6 +74,15 @@ static inline void ConfigureInterrupt(IRQn_Type src, uint32_t priority, cy_israd
 	NVIC_EnableIRQ(intr_config.intrSrc);
 }
 
+static inline void ConfigureInterruptGPIO(const cy_stc_sysint_t* pintr_config, cy_israddress isr_address)
+{
+	Cy_SysInt_Init(pintr_config, isr_address);
+	NVIC_ClearPendingIRQ(pintr_config->intrSrc);
+	NVIC_EnableIRQ(pintr_config->intrSrc);
+}
+
+
+
 /************************************************************************************* main.c */
 extern const char VersionString[];
 extern const char _consoleHeader[];

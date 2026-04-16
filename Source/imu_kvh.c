@@ -70,7 +70,6 @@ void KVH_ExitConfigMode()
 }   
 
 
-uint32_t kvh_msg_delay = 0; // to reduce the kvh mark time to the beguining of the message.
 
 /****************************************************************************
  * Format_FSAS_SN_to_NovatelRawSX()
@@ -93,7 +92,7 @@ void Format_KVH_to_NovatelRawSX( PKVH_MSG pmsg )
 	};
 
 	_RawImuSX.Hdr.gpsweek = UsecEventTime.GPSWeek;
-	_RawImuSX.Hdr.gpsmsec = UsecEventTime.WeekMilliSeconds - kvh_msg_delay;
+	_RawImuSX.Hdr.gpsmsec = UsecEventTime.WeekMilliSeconds; 
 
 	_RawImuSX.imu_info   = pmsg->Status != 0? 1: 0;	// Biy 0 gl
 	_RawImuSX.imu_type   = KVH_1750;
@@ -129,11 +128,14 @@ uint8_t kvh_status;
 
 bool Init_KVH_IMU()
 {
+    Stop_IMU_Trigger_Frequency();						// In case we have a warm restart
     Init_Uart_IMU(B460800);
-    SetImuMsgProcessor( Receive_KVH_Datagram );		// Switch to IMU data decoding
+    SetImuMsgProcessor( Receive_KVH_Datagram );		    // Switch to IMU data decoding
     Sync_Uart_IMU(KVH_RECORD_SIZE);
     Set_IMU_Trigger_Frequency(DEFAULT_IMU_FREQUENCY);	// 200hz start IMU trigger
-
+//    Init_IMU_Trigger_Monitor(DEFAULT_IMU_FREQUENCY);	// event timing for IMU data timestamp
+    Init_USec_Timer();
+    
     return true;
 }
 

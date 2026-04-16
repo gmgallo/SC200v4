@@ -1038,12 +1038,9 @@ void StoreOnceMessage(void* vp)
 	LogNovatelMessage(vp, GetRecordLength(vp));
 }
 
-extern bool DisableImuLogs;
-
 void SendRawIMUSX(void *vp)
 {
-	if (!DisableImuLogs)
-		LogNovatelMessage(vp, GetRecordLength(vp));
+	LogNovatelMessage(vp, GetRecordLength(vp));
 }
 
 /*------------------------------------------------------------------

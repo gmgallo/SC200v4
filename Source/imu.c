@@ -47,8 +47,6 @@ volatile bool IMU_NoGo = false;
 
 volatile bool Enable_IMU_Logging = false;
 
-bool DisableImuLogs = false;
-
 FSAS_Status volatile IMUStatus =
 {
 		.Crc_Errors = 0,
@@ -192,7 +190,7 @@ void Set_IMU_Trigger_Frequency(uint32_t _frequency)
 	else if (_frequency < 1 )
 		_frequency = 1;
 
-	IMU_Clock = _frequency;
+	IMU_Clock = _frequency; // update to have accurate imu records time tagging.
 
 	int j = ComposeMarkOutCommand(buf, ARRAY_SIZE(buf), 1, _frequency, 10, false);
 	Uart_Oem7700_Send((uint8_t*)buf,j);
@@ -229,12 +227,12 @@ bool Init_IMU_Interface(imu_type_t Type, imu_target_t Target)
 	if (Type == IMUType_FSAS )
 	{
 		Stop_IMU_Trigger_Frequency();						// In case we have a warm restart
-		Init_USec_Timer();									// TDAS event timing for IMU data timestamp
 		SetImuDataFormat(fmtNOVATEL_RAW);					// IMU data format reporting
 		SetImuMsgProcessor(Decode_FSAS_IMU_Data);			// Switch to IMU data decoding
 		Init_IMU_NOGO_Detect();								// GO/NOGO signal monitoring
 		Init_Uart_IMU( B115200 );
 		Set_IMU_Trigger_Frequency(DEFAULT_IMU_FREQUENCY);	// 200hz start IMU trigger
+		Init_IMU_Trigger_Monitor(DEFAULT_IMU_FREQUENCY);	// TDAS event timing for IMU data timestamp
 
 		IMU_init = true;
 	}
@@ -242,9 +240,9 @@ bool Init_IMU_Interface(imu_type_t Type, imu_target_t Target)
 	{
 		Init_STIM_TOV_Detect( Target );
 
-		IMU_Clock = 125.0;					// 125Hz
+		IMU_Clock = 125.0;						// 125Hz
 
-		if(Target == Target_NovAtel )		// do STIM300 initialization
+		if(Target == Target_NovAtel )			// do STIM300 initialization
 		{
 			IMU_init = true;
 		}
@@ -253,7 +251,7 @@ bool Init_IMU_Interface(imu_type_t Type, imu_target_t Target)
 			Init_Uart_IMU(B460800);
 
 			// to be implemented
-			PrintWithTime( "STIM300 handled by PSOC *** NOT IMPLEMENTEDD ***\n" );
+			PrintWithTime( "==> STIM300 handled by PSOC *** NOT IMPLEMENTEDD ***\n" );
 			SetImuMsgProcessor( Receive_STIM300_Datagram );		// Switch to IMU data decoding
 			Init_STIM_Framing = true;
 

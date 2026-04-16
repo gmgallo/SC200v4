@@ -12,8 +12,8 @@
 //#define DEBUG_OEM7700_TX_ISR
 //#define DEBUG_OEM7700_RX_ISR
 
-#define DEBUG_IMU_ISR
-#define UART_IMU_TP	(TP8)
+//#define DEBUG_IMU_ISR
+//#define UART_IMU_TP	(TP8)
 
 
 /*************************************************************************
