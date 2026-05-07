@@ -52,8 +52,8 @@ typedef struct
 typedef struct// ALL DATA IS RECEIVED IN BIG ENDIAN FORMAT
 {
 	uint32_t	header;		// 4 bytes
-	float		Xgyro;		// 4 bytes
-	float		Ygyro;	// 4 bytes
+	float		Xgyro;		// 4 bytes default gyro values in radian increments.
+	float		Ygyro;		// 4 bytes
 	float		Zgyro;		// 4 bytes
 	float		Xaccel;		// 4 bytes
 	float		Yaccel;		// 4 bytes
@@ -67,6 +67,12 @@ typedef struct// ALL DATA IS RECEIVED IN BIG ENDIAN FORMAT
 
 #define KVH_RECORD_SIZE sizeof(kvh_msg_t)
 
+/* scale factors to convert floating point IMU data to integer counts */
+static inline int32_t RADIANS_TO_COUNT(float r) { return (int32_t)(0.5+(r)*528037903.99f); }	// convert radians  angle counts. 528037903.99 = 2^32 / (2*PI) where 2^32 is the number of counts in the 4 byte signed integer and 2*PI is the range of the angle in radians.
+static inline int32_t ACCEL_TO_COUNT(float g)   { return (int32_t)(0.5+(g)*655360.0f); }		// convert g accel to counts.
+
+extern imu_format_t KVH_ImuFormat;
+
 bool Init_KVH_IMU();
 
 size_t GetKVHStatus(char* buffer, size_t size);
@@ -74,6 +80,7 @@ size_t GetKVHStatusShort(char* buffer, size_t size);
 
 void KVH_EnterConfigMode(_ports_t port);
 void KVH_ExitConfigMode();
+void KVH_SendConfigCommand(const char_t* cmd);
 void Receive_KVH_Datagram(uint8_t* buffer, size_t cnt);
 
 #pragma pack(pop)

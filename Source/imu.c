@@ -175,7 +175,7 @@ void Init_IMU_NOGO_Detect()
 /****************************************************************************
  * Set_IMU_Trigger_Frequency()
  *
- *  - adjust the TDAS (strobe) frequency
+ *  - adjust the TDAS (strobe) IMU trigger frequency
  *  - also sets the MARK1 control in the NovAtel receiver.
  *
  ****************************************************************************/
@@ -483,7 +483,7 @@ void ClearImuStatus()
  * SetIMUScalling()
  *
  *  - adjust the scale factors according to the TDAS (strobe) frequency
- *
+ *	(NOT USED)
  *
  ****************************************************************************/
 double GyroScale = 1;		// deg/seg
@@ -520,19 +520,17 @@ void SetImuDataFormat(imu_format_t format)
 	case INVALID_FORMAT:
 	case fmtNOVATEL_RAW: /* DEFAULT Format compatible with OEM7700 receiver logs */
 		_FormatImuRecord = Format_FSAS_SN_to_NovatelRawSX;
-		log_gnss_records = true;
 		PrintWithTime("IMU data format set to NOVATEL_RAW.\n");
 		break;
 
 	case fmtFSAS_NATIVE: /* format incompatible with OEM7700 receiver logs */
 		_FormatImuRecord = Format_FSAS_SN_Native;
-		log_gnss_records = false;
 		PrintWithTime("IMU data format set to FSAS NATIVE.\n");
 		break;
 
 	case fmtNOVATEL_IMR: /* format incompatible with OEM7700 receiver logs */
 		_FormatImuRecord = Format_FSAS_SN_to_txINS;
-		log_gnss_records = false;
+		KVH_ImuFormat = fmt_KVH;
 		PrintWithTime("IMU data format set to NOVATEL IMR.\n");
 		break;
 
@@ -544,8 +542,8 @@ void SetImuDataFormat(imu_format_t format)
 		}
 	case fmt_KVH:
 		{
-			/* TODO change to this format */
-			PrintWithTime("KVH data format not implemented.\n");
+			KVH_ImuFormat = fmt_KVH;
+			PrintWithTime("KVH IMU format selected.\n");
 			break;
 		}
 	}

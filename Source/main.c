@@ -114,7 +114,6 @@ sys_config_t SysConfig;
 
 _ports_t LoggingPort = 0;				/* Flags indicating where to send IMU / GNSS reports */
 _ports_t SidebandPort = 0;				/* port for side band reports and control */
-bool log_gnss_records = true;
 
 char mainBuffer[1024] = "";
 

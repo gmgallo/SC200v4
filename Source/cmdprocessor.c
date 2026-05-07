@@ -2640,18 +2640,24 @@ char *imu_record_size_cmd(char** tokens, int cnt, _ports_t port)
 
 /*------------------------------------------------------------------------------------- IMUCONSOLE */
 _ports_t consolePort;
+typedef void (*format_ouptut_fn)(const char_t* buf);
+format_ouptut_fn _format_output = Uart_IMU_SendString;
 
-void ConsoletMsgProcessor(uint8_t* buf, size_t cnt)
+
+char *GrabIMUConsoleInput(uint8_t* buf, _ports_t port)
 {
-	SendToPort(consolePort, buf, cnt);	
-	while(cnt-- > 0)
+	if (buf[0] == 'x' || buf[0] == 'X') // Test for grab end
 	{
-		char c = *buf++;
-		console_putchar(c);
+		_release_console();
+		return "IMU Console disconnected.\n";
 	}
+	_format_output((char_t*)buf); 	// Send line to IMU port
+
+	return NULL;
 }
 
-void LeaveConsole()
+
+void LeaveKvhConsole()
 {
 	if (SpanStatus.ImuType == IMUType_KVH)
 	{
@@ -2667,8 +2673,8 @@ char *imu_console_cmd(char**tokens, int cnt, _ports_t port)
 	if (SpanStatus.ImuType == IMUType_KVH)
 	{
 		SendToPort(port, (uint8_t*)msg, strlen(msg));
-
-		_grab_console(GrabConsoleInput, LeaveConsole);
+		_format_output = KVH_SendConfigCommand;
+		_grab_console(GrabIMUConsoleInput, LeaveKvhConsole);
 		KVH_EnterConfigMode(port);
 		return NULL;
 	}

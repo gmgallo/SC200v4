@@ -88,7 +88,6 @@ extern const char VersionString[];
 extern const char _consoleHeader[];
 extern _ports_t LoggingPort;
 extern uint32_t imuFrequency;
-extern bool log_gnss_records;
 
 void Send_GNSS_Record( void* pdata, size_t data_size);
 void Purge_GNSS_Buffer();

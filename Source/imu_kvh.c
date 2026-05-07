@@ -10,7 +10,8 @@
 uint32_t kvh_crc(const void* data, size_t data_len);
 
 char* kvh_test_cmd = "=BIT\n";
-char* kvh_enter_config_cmd = "=CONFIG,1\n=MSYNC,EXT\n=BAUD,460800\n=CONFIG,0\n";
+char* kvh_reset_config_cmd = "=CONFIG,1\n=MSYNC,EXT\n=BAUD,460800\n=CONFIG,0\n"; // if IMU was factory reset, send this @9921600 Bauds. 
+char* kvh_enter_config_cmd = "=CONFIG,1\n";
 char* kvh_signin_cmd = "?WS\n";
 char* kvh_exit_config_cmd  = "=CONFIG,0\n";
 
@@ -51,69 +52,38 @@ void kvh_console_msg_processor(uint8_t* buf, size_t cnt)
 void KVH_EnterConfigMode(_ports_t port)
 {
     console_port = port;
-  //  Disable_Uart_IMU_RX_Interrupt();
+
+    Stop_IMU_Trigger_Frequency();
+
     prev_msg_processor =SetImuMsgProcessor(NULL);
 
     Reconfig_Uart_IMU(0, true);  // One interrupt per character
-    Uart_IMU_SendString((char_t*)kvh_enter_config_cmd);
-    Cy_SysLib_Delay(100);
     SetImuMsgProcessor(kvh_console_msg_processor);
+ //   Uart_IMU_SendString((char_t*)kvh_enter_config_cmd);
+//    Cy_SysLib_Delay(100);
   //  Cy_SysLib_Delay(100);
   //  Uart_IMU_SendString((char_t*)kvh_signin_cmd);
 }
+
+void KVH_SendConfigCommand(const char_t* cmd)
+{
+    char buf[256];
+
+    snprintf(buf, sizeof(buf), "=CONFIG,1\n%s\n=CONFIG,0\n", cmd);
+    Uart_IMU_SendString((char_t*)cmd);
+    Cy_SysLib_Delay(100);
+}
+
 
 void KVH_ExitConfigMode()
 {
     Reconfig_Uart_IMU(KVH_RECORD_SIZE-1, true);
     SetImuMsgProcessor(prev_msg_processor);
     Uart_IMU_SendString((char_t*)kvh_exit_config_cmd);
+    Set_IMU_Trigger_Frequency(DEFAULT_IMU_FREQUENCY);	// 200hz start IMU trigger
 }   
 
 
-
-/****************************************************************************
- * Format_FSAS_SN_to_NovatelRawSX()
- *
- *  - Checks record integrity and posts it as tXINS record.
- *
- ****************************************************************************/
-void Format_KVH_to_NovatelRawSX( PKVH_MSG pmsg )
-{
-	RAWIMUSX_t _RawImuSX =		// defined in Novatel.h
-	{
-		.Hdr = // short header
-		{
-			.sync1  = NOVATEL_SYNC1,
-			.sync2  = NOVATEL_SYNC2,
-			.sync3  = NOVATEL_SYNC3_SHORT,
-			.msglen = RAWIMUSX_MSG_LENGTH,
-			.msgid  = RAWIMUSX_ID
-		},
-	};
-
-	_RawImuSX.Hdr.gpsweek = UsecEventTime.GPSWeek;
-	_RawImuSX.Hdr.gpsmsec = UsecEventTime.WeekMilliSeconds; 
-
-	_RawImuSX.imu_info   = pmsg->Status != 0? 1: 0;	// Biy 0 gl
-	_RawImuSX.imu_type   = KVH_1750;
-	_RawImuSX.imu_status = pmsg->Status;
-
-	_RawImuSX.gnss_week    = UsecEventTime.GPSWeek;
-	_RawImuSX.week_seconds = UsecEventTime.WeekSeconds;		// a double in full seconds
-
-	_RawImuSX.z_accel  =(int32_t) pmsg->Zaccel;	
-    _RawImuSX._y_accel = (int32_t) pmsg->Yaccel;
-	_RawImuSX.x_accel  = (int32_t) pmsg->Xaccel;
-
-	_RawImuSX.z_gyro  = (int32_t) pmsg->Zgyro;	
-    _RawImuSX._y_gyro = (int32_t) pmsg->Ygyro;
-	_RawImuSX.x_gyro  = (int32_t) pmsg->Xgyro;
-
-	_RawImuSX.crc = CalculateBlockCRC32( RAWIMUSX_CRC_OFFSET, (void*)&_RawImuSX );
-
-	if ( Enable_IMU_Logging)
-		Send_IMU_Record( (void*)&_RawImuSX, sizeof(RAWIMUSX_t));
-}
 
 /*----------------------------------------------------------------------
 * KVH IMU decodidng and formatting functions
@@ -125,6 +95,9 @@ uint32_t kvh_crc_error = 0;
 uint32_t kvh_msg_count = 0;
 uint8_t kvh_msg_buf[KVH_RECORD_SIZE+2];
 uint8_t kvh_status;
+
+imu_format_t KVH_ImuFormat = fmtNOVATEL_RAW;
+
 
 bool Init_KVH_IMU()
 {
@@ -152,7 +125,6 @@ size_t GetKVHStatusShort(char* buffer, size_t size)
             (int)kvh_status,
             (int)((gyro_error || accel_error)? 'N' : 'G'));
 
-        
 }
 
 size_t GetKVHStatus(char* buffer, size_t size)
@@ -181,6 +153,46 @@ size_t GetKVHStatus(char* buffer, size_t size)
     return cnt;
 }
 
+/****************************************************************************
+ * Format_KVH_to_NovatelRawSX()
+ ****************************************************************************/
+void Format_KVH_to_NovatelRawSX( PKVH_MSG pmsg )
+{
+	RAWIMUSX_t _RawImuSX =		// defined in Novatel.h
+	{
+		.Hdr = // short header
+		{
+			.sync1  = NOVATEL_SYNC1,
+			.sync2  = NOVATEL_SYNC2,
+			.sync3  = NOVATEL_SYNC3_SHORT,
+			.msglen = RAWIMUSX_MSG_LENGTH,
+			.msgid  = RAWIMUSX_ID
+		},
+	};
+
+	_RawImuSX.Hdr.gpsweek = UsecEventTime.GPSWeek;
+	_RawImuSX.Hdr.gpsmsec = UsecEventTime.WeekMilliSeconds; 
+
+	_RawImuSX.imu_info   = pmsg->Status != 0x77? 1: 0;	// Biy 0 gl
+	_RawImuSX.imu_type   = KVH_1750;
+	_RawImuSX.imu_status = pmsg->Status;
+
+	_RawImuSX.gnss_week    = UsecEventTime.GPSWeek;
+	_RawImuSX.week_seconds = UsecEventTime.WeekSeconds;		// a double in full seconds
+
+	_RawImuSX.z_accel  = ACCEL_TO_COUNT(pmsg->Zaccel);	
+    _RawImuSX._y_accel = ACCEL_TO_COUNT(pmsg->Yaccel);
+	_RawImuSX.x_accel  = ACCEL_TO_COUNT(pmsg->Xaccel);
+
+	_RawImuSX.z_gyro  = RADIANS_TO_COUNT( pmsg->Zgyro);	
+    _RawImuSX._y_gyro = RADIANS_TO_COUNT( pmsg->Ygyro);
+	_RawImuSX.x_gyro  = RADIANS_TO_COUNT( pmsg->Xgyro);
+
+	_RawImuSX.crc = CalculateBlockCRC32( RAWIMUSX_CRC_OFFSET, (void*)&_RawImuSX );
+
+	Send_IMU_Record( (void*)&_RawImuSX, sizeof(RAWIMUSX_t));
+}
+
 void Decode_KVH_Datagram()
 {
     uint32_t* p = (uint32_t*)kvh_msg_buf;
@@ -194,9 +206,21 @@ void Decode_KVH_Datagram()
     PKVH_MSG pmsg = (PKVH_MSG)kvh_msg_buf;
     pmsg->Temp = __builtin_bswap16(pmsg->Temp);
     kvh_status = pmsg->Status;
+    pmsg->crc = __builtin_bswap32(pmsg->crc);
+
     kvh_msg_count++;
 
-    Format_KVH_to_NovatelRawSX(pmsg);
+    if ( Enable_IMU_Logging)
+    {
+        if (KVH_ImuFormat == fmtNOVATEL_RAW)
+        {
+            Format_KVH_to_NovatelRawSX(pmsg);
+        }
+        else if (KVH_ImuFormat == fmt_KVH)
+        {
+            Send_IMU_Record( (void*)pmsg, sizeof(kvh_msg_t));
+        }   
+    }
 }
 
 void Receive_KVH_Datagram(uint8_t* buffer, size_t cnt)
