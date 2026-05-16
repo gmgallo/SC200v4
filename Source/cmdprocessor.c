@@ -1325,19 +1325,11 @@ char *imufreq_cmd(char**tokens, int cnt, _ports_t port)
  * 	IMUFORMAT format
  *
  * 	Argument:
- * 		format 		FSAS, IMR, STIM, or RAW (startup default)
+ * 		format 		FSAS, IMR, STIM, KVH or NRAW (=NovAtel raw startup default)
  *
  * 	Format is not saved to config. Always defaults to RAW on startup.
  *
  */
-/*
-int find_IMU_Format(const char*token)
-{
-	int fmt = find_KeywordConstant( ImuFormatDictionary, ARRAY_SIZE(ImuFormatDictionary), token);
-	return fmt == IS_NEITHER? INVALID_IMU_FORMAT: fmt;
-}
-*/
-
 char *imuformat_cmd(char**tokens, int cnt, _ports_t port)
 {
 	if (cnt < 2)

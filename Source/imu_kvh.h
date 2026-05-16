@@ -68,8 +68,8 @@ typedef struct// ALL DATA IS RECEIVED IN BIG ENDIAN FORMAT
 #define KVH_RECORD_SIZE sizeof(kvh_msg_t)
 
 /* scale factors to convert floating point IMU data to integer counts */
-static inline int32_t RADIANS_TO_COUNT(float r) { return (int32_t)(0.5+(r)*528037903.99f); }	// convert radians  angle counts. 528037903.99 = 2^32 / (2*PI) where 2^32 is the number of counts in the 4 byte signed integer and 2*PI is the range of the angle in radians.
-static inline int32_t ACCEL_TO_COUNT(float g)   { return (int32_t)(0.5+(g)*655360.0f); }		// convert g accel to counts.
+static inline int32_t RADIANS_TO_COUNT(float r) { return (int32_t)(r*528037904.0f); }			// convert radians  angle counts. 528037903.99 = 2^32 / (2*PI) where 2^32 is the number of counts in the 4 byte signed integer and 2*PI is the range of the angle in radians.
+static inline int32_t ACCEL_TO_COUNT(float g)   { return (int32_t)(g*65536.0f); }	// convert g accel to counts.
 
 extern imu_format_t KVH_ImuFormat;
 

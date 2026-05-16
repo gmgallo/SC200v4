@@ -59,10 +59,6 @@ void KVH_EnterConfigMode(_ports_t port)
 
     Reconfig_Uart_IMU(0, true);  // One interrupt per character
     SetImuMsgProcessor(kvh_console_msg_processor);
- //   Uart_IMU_SendString((char_t*)kvh_enter_config_cmd);
-//    Cy_SysLib_Delay(100);
-  //  Cy_SysLib_Delay(100);
-  //  Uart_IMU_SendString((char_t*)kvh_signin_cmd);
 }
 
 void KVH_SendConfigCommand(const char_t* cmd)
@@ -173,14 +169,18 @@ void Format_KVH_to_NovatelRawSX( PKVH_MSG pmsg )
 	_RawImuSX.Hdr.gpsweek = UsecEventTime.GPSWeek;
 	_RawImuSX.Hdr.gpsmsec = UsecEventTime.WeekMilliSeconds; 
 
-	_RawImuSX.imu_info   = pmsg->Status != 0x77? 1: 0;	// Biy 0 gl
-	_RawImuSX.imu_type   = KVH_1750;
-	_RawImuSX.imu_status = pmsg->Status;
+    uint32_t status = pmsg->Status;
+    uint32_t cnt = pmsg->Sequence;
+    uint32_t temp = pmsg->Temp;
+    uint32_t nstat = (((temp << 8) | cnt) << 8) | status;
 
-	_RawImuSX.gnss_week    = UsecEventTime.GPSWeek;
+	_RawImuSX.imu_info   = status == 0x77? 4 : 1;	// Bit 0 gl
+	_RawImuSX.imu_type   = KVH_1750;
+	_RawImuSX.imu_status = nstat;   // combine sequence and status in the imu_status
+    _RawImuSX.gnss_week    = UsecEventTime.GPSWeek;
 	_RawImuSX.week_seconds = UsecEventTime.WeekSeconds;		// a double in full seconds
 
-	_RawImuSX.z_accel  = ACCEL_TO_COUNT(pmsg->Zaccel);	
+	_RawImuSX.z_accel  = ACCEL_TO_COUNT(pmsg->Zaccel);
     _RawImuSX._y_accel = ACCEL_TO_COUNT(pmsg->Yaccel);
 	_RawImuSX.x_accel  = ACCEL_TO_COUNT(pmsg->Xaccel);
 
