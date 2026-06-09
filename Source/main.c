@@ -401,11 +401,9 @@ void Init_WDT()
 
     cyhal_wdt_start(&wdt_obj);
 }
-
 //#define MONITOR_IMU_LOG
 //#define MONITOR_GNSS_LOG
-
-
+ 
 /*===============================================================  Main() */
 int main(void)
 {
@@ -423,6 +421,9 @@ int main(void)
 		SysConfig.no_com2_logs_init = false;
 		SysConfig.imu_type = DEFAULT_IMU_TYPE;
 		SysConfig.imu_connect = DEFAULT_IMU_TARGET;
+		SysConfig.imu_accel_scale = DEFAULT_IMU_SCALE;
+		SysConfig.imu_gyro_scale = DEFAULT_IMU_SCALE;
+		
 		SaveConfig(&SysConfig);
 	}
 
@@ -595,7 +596,6 @@ int main(void)
 		}
 
         /*------------------------------------ Periodic reports -*/
-        static uint32_t send_cnt = 0;
 
         if (newReportRecords == true)
         {
@@ -603,8 +603,6 @@ int main(void)
 
         	while(GetRingBufferCount(HandleReportRecords ) > 0 )
         	{
-        		send_cnt++;
-
         		repbuf_t* R = PopRigngBufferData(HandleReportRecords);
 
           		CY_ASSERT(R->Dbuf.Buffer < (uint8_t*) 0x0804FFFFu);
@@ -614,17 +612,17 @@ int main(void)
 					Uart_COM_Send(R->Dbuf.Buffer, R->Dbuf.Count);
         		}
         		else if (R->Port == USB_COM1)
-        		{
-        			Send_USB_CDC_Data(USBUART_COM1, R->Dbuf.Buffer, R->Dbuf.Count);
-        		}
-           		else if (R->Port == USB_COM2)
-				{
-					Send_USB_CDC_Data(USBUART_COM2, R->Dbuf.Buffer, R->Dbuf.Count);
-				}
-           		else if (R->Port == UART_CONSOLE )
-				{
-					printf((char*) R->Dbuf.Buffer );
-				}
+					{
+						Send_USB_CDC_Data(USBUART_COM1, R->Dbuf.Buffer, R->Dbuf.Count);
+					}
+					else if (R->Port == USB_COM2)
+						{
+							Send_USB_CDC_Data(USBUART_COM2, R->Dbuf.Buffer, R->Dbuf.Count);
+						}
+						else if (R->Port == UART_CONSOLE )
+							{
+								printf((char*) R->Dbuf.Buffer );
+							}
         	}
         }
         Monitor_USB_CDC_Status();	// can't reconnect from an ISR

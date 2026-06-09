@@ -85,6 +85,13 @@ void KVH_ExitConfigMode()
 * KVH IMU decodidng and formatting functions
 *----------------------------------------------------------------------*/
 
+double kvh_accel_scale = 32768.0;
+double kvh_gyro_scale =  528037904.0; 
+
+/* scale factors to convert floating point IMU data to integer counts */
+static inline int32_t RADIANS_TO_COUNT(float r) { return (int32_t)(r*kvh_gyro_scale*imuFrequency); }	// pRIOR 60849.543863f
+static inline int32_t ACCEL_TO_COUNT(float g)   { return (int32_t)(g*kvh_accel_scale); }		// convert g accel to counts.
+
 uint32_t kvh_uart_error = 0;
 uint32_t kvh_crc_error = 0;
 
@@ -98,6 +105,17 @@ imu_format_t KVH_ImuFormat = fmtNOVATEL_RAW;
 bool Init_KVH_IMU()
 {
     Stop_IMU_Trigger_Frequency();						// In case we have a warm restart
+
+    if (SysConfig.imu_accel_scale != DEFAULT_IMU_SCALE )
+    {
+        kvh_accel_scale = SysConfig.imu_accel_scale;
+    }
+
+    if (SysConfig.imu_gyro_scale != DEFAULT_IMU_SCALE)
+    {
+        kvh_gyro_scale = SysConfig.imu_gyro_scale;
+    }
+
     Init_Uart_IMU(B460800);
     SetImuMsgProcessor( Receive_KVH_Datagram );		    // Switch to IMU data decoding
     Sync_Uart_IMU(KVH_RECORD_SIZE);

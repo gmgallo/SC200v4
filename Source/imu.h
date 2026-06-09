@@ -53,8 +53,9 @@ extern const size_t    ImuComTargetsCount;
 extern const tkeywrd_t ImuFormatsDictionary[];
 extern const size_t   ImuFormatsCount;
 
-#define DEFAULT_IMU_TYPE	IMUType_KVH	// can be changed and stored in NV EEPROM
+#define DEFAULT_IMU_TYPE	IMUType_KVH		// can be changed and stored in NV EEPROM
 #define DEFAULT_IMU_TARGET	Target_PSOC		// For receivers without SPAN firmware
+#define DEFAULT_IMU_SCALE	0.0				// For IMUs that may need accel / gyro scale correction to be saved in SysConfig.
 
 /****************************************************************************
 * Init_IMU_Interface()
@@ -116,7 +117,7 @@ typedef enum
 	fmt_STIM300	   = 4,
 	fmt_KVH		   = 5,
 
-	} imu_format_t;				// This is the IMU format to report to the logger app
+} imu_format_t;				// This is the IMU format to report to the logger app
 
 /****************************************************************************
  * SetImuDataFormat()

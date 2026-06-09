@@ -117,6 +117,8 @@ typedef struct
 	int8_t imu_type;			// ID of IMU selected
 	int8_t imu_connect;			// IMU COM directed to OEM7700 or PSOC6 (default)
 	int8_t enable_ins;			// for receivers with SPAN firmware
+	double imu_accel_scale;		// 0 = IMU default
+	double imu_gyro_scale;		// 0 = IMU default
 
 	//-------------------------- end payload
 	uint16_t Crc;			// Integrity check
@@ -129,5 +131,6 @@ extern sys_config_t SysConfig;		/* defined in main.c */
 bool ReadConfig(sys_config_t* cfg);
 bool SaveConfig(sys_config_t* cfg);
 
+int PrintSysConfig(char* buffer, size_t size);
 
 #endif /* EPROM_H_ */

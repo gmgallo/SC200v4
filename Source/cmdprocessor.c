@@ -189,6 +189,8 @@ char *verbose_cmd(char**,int,_ports_t);
 char* release_timer_cmd(char** tokens, int cnt, _ports_t port);
 char* create_timer_cmd(char** tokens, int cnt, _ports_t port);
 char* clock_monitor_cmd(char** tokens, int cnt, _ports_t port);
+char* imuaccel_scale_cmd(char** tokens, int cnt, _ports_t port);
+char* imugyro_scale_cmd(char** tokens, int cnt, _ports_t port);
 
 /*--------------------------------------------------------------------------- command dictionary */
 typedef struct
@@ -209,6 +211,8 @@ const fn_dictionary_t CmdDictionary[] =
 		{"IMUFORMAT",	imuformat_cmd},
 		{"IMUTYPE",		imutype_cmd},
 		{"IMUCONNECT",	imuconnect_cmd},
+		{"IMUACCELSCALE", imuaccel_scale_cmd},
+		{"IMUGYROSCALE", imugyro_scale_cmd},
 		{"SYSTEMRESET", system_reset_cmd},
 		{"SYSCONFIG", 	sysconfig_cmd},
 		{"STANDBY",		standby_cmd},
@@ -232,8 +236,8 @@ const fn_dictionary_t CmdDictionary[] =
 		{"VERBOSE",  	verbose_cmd},			// Echo all commands and answer to the console.
 		{"GENOUTPUT",   genoutput_cmd },		// generates a n output of n bytes with crc16
 		{"ECHO2",       echo2_cmd	},			// Echoes back what's received by the port
-		{"GNSSLOGS",    gnss_log_cmd}, 			// enables (default) / disables GNSS logs to be sent with IMU logs
-		{"IMULOGS", 	imu_log_cmd},			// To receive GNSS logs only
+		{"GNSSLOGS",    gnss_log_cmd}, 		// enables (default) / disables GNSS logs 
+		{"IMULOGS", 	imu_log_cmd},			// enables (default) / disables IMU logs
 		{"BENCHMARK",	benchmark_cmd},  		// executes several benchmarks
 		{"TEST",		test_cmd },				// executes several test commands
 		{"CREATETIMER", create_timer_cmd},
@@ -393,23 +397,6 @@ const char* find_KeywordName ( const tkeywrd_t* list, size_t size, const int key
 }
 
 
-/*----------------------------------------------------------------- IMU Commands arguments */
-
-int sprintfconfig(char* buffer, size_t size)
-{
-	sys_config_t config;
-
-	ReadConfig( &config);
-	int cnt = 0;
-
-	cnt += snprintf(buffer, size, "Soft reset: %s\n", (config.soft_reset != 0? "Yes": "No"));
-	cnt += snprintf(buffer+cnt, size-cnt,"No COM2 Log Init: %s\n",config.no_com2_logs_init != 0?  "True": "False");
-	cnt += snprintf(buffer+cnt, size-cnt,"IMU Type: %s\n", GetImuTypeName(config.imu_type));
-	cnt += snprintf(buffer+cnt, size-cnt,"IMU connect to: %s\n", GetImuConnectName(config.imu_connect));
-
-	return cnt;
-}
-
 
 /*---------------------------------------------------------------- Value Converters */
 int ToInt32(char* token, int32_t *pvalue)
@@ -422,6 +409,10 @@ int ToUint32(char* token, uint32_t *pvalue)
 	 return sscanf(token, "%lu", pvalue);
 }
 
+float ToFloat(char* token, float* pvalue)
+{
+	 return sscanf(token, "%f", pvalue);
+}
 
 /****************************************************************************
 * Command decoder
@@ -1351,10 +1342,12 @@ char *imuformat_cmd(char**tokens, int cnt, _ports_t port)
 	return CmdAnswer;
 }
 
+
+
 /*------------------------------------------------------------------------------------- IMUTYPE */
 /* Command format:
  *
- * 	IMUTYPE type
+ * 	IMUTYPE type [SAVE]
  *
  * 	Argument:
  * 		Imu types supported	FSAS, STIM, KVH, etc.
@@ -1399,17 +1392,17 @@ char *imutype_cmd(char** tokens, int cnt, _ports_t port)
 /*------------------------------------------------------------------------------------- IMUCONNECT */
 /* Command format:
  *
- * 	IMUCONNECT target
+ * 	IMUCONNECT target [SAVE]
  *
  * 	Argument:
  * 		target 		PSOC \ OEM7700
- *
  */
 char *imuconnect_cmd(char** tokens, int cnt, _ports_t port)
 {
 	if (cnt < 2)
 	{
-		return PrintCmdError( "Missing TYPE argument.");
+		snprintf(CmdAnswer, ARRAY_SIZE(CmdAnswer),"IMU Connected to: %s\nValid targets: PSOC, OEM770\n", find_KeywordName(ImuComTargets, ImuComTargetsCount, SysConfig.imu_connect)  );
+		return CmdAnswer;
 	}
 
 	int key = find_KeywordConstant( ImuComTargets, ImuComTargetsCount, tokens[1]);
@@ -1435,6 +1428,79 @@ char *imuconnect_cmd(char** tokens, int cnt, _ports_t port)
 	return CmdAnswer;
 }
 
+
+/*------------------------------------------------------------------------------------- IMUACCELSCALE */
+/* Command format:
+ *
+ * 	IMUACCELSCALE scale [SAVE]
+ *
+ * 	Argument:
+ * 		scale - float value
+ */
+char* imuaccel_scale_cmd(char** tokens, int cnt, _ports_t port)
+{
+	if (cnt < 2)
+	{
+		snprintf(CmdAnswer, ARRAY_SIZE(CmdAnswer),"IMU ACCEL Adjustment Scale: %.3f\nValid scales: float value (0.0 = default) [SAVE]\n", SysConfig.imu_accel_scale );
+		return CmdAnswer;
+	}
+
+	float scale = 0.0;
+
+	if ( sscanf( tokens[1], "%f", &scale ) == 0)
+	{
+		return PrintCmdError( "INVALID Scale Argument\n" );
+	}
+
+	char* saved = "NOT saved.";
+	SysConfig.imu_accel_scale = scale;
+
+	if (cnt > 2 && strcmp(tokens[2],"SAVE") == 0)
+	{
+		SaveConfig(&SysConfig);
+		saved = "SAVED.";
+	}
+	snprintf(CmdAnswer, ARRAY_SIZE(CmdAnswer),"[%s] IMU ACCEL SCALE changed to %s - %s\n", GetUpTimeStr(), tokens[1], saved );
+
+	return CmdAnswer;
+}
+
+/*------------------------------------------------------------------------------------- IMUACCELSCALE */
+/* Command format:
+ *
+ * 	IMUGYROSCALE scale [SAVE]
+ *
+ * 	Argument:
+ * 		scale - float value
+ */
+char* imugyro_scale_cmd(char** tokens, int cnt, _ports_t port)
+{
+	if (cnt < 2)
+	{
+		snprintf(CmdAnswer, ARRAY_SIZE(CmdAnswer),"IMU GYRO Adjustment Scale: %.3f\nValid scales: float value (0.0 = default) [SAVE]\n", SysConfig.imu_gyro_scale );
+		return CmdAnswer;
+	}
+
+	float scale = 0.0;
+
+	if ( sscanf( tokens[1], "%f", &scale ) == 0)
+	{
+		return PrintCmdError( "INVALID Scale Argument\n" );
+	}
+	
+	char* saved = "NOT saved.";
+	SysConfig.imu_gyro_scale = scale;
+
+	if (cnt > 2 && strcmp(tokens[2],"SAVE") == 0)
+	{
+		SaveConfig(&SysConfig);
+		saved = "SAVED.";
+	}
+	snprintf(CmdAnswer, ARRAY_SIZE(CmdAnswer),"[%s] IMU GYRO SCALE changed to %s - %s\n", GetUpTimeStr(), tokens[1], saved );
+
+	return CmdAnswer;
+
+}
 
 
 /*-------------------------------------------------------------------------------------- LOG */
@@ -1718,7 +1784,7 @@ char *request_gps_log_cmd(char** tokens, int cnt, _ports_t port)
  */
 char *sysconfig_cmd(char** tokens, int cnt, _ports_t port)
 {
-	int count = sprintfconfig(CmdAnswer, ARRAY_SIZE(CmdAnswer));
+	int count = PrintSysConfig(CmdAnswer, ARRAY_SIZE(CmdAnswer));
 
 	SendToPort( port, (uint8_t*)CmdAnswer, count );
 	return PrintCmdOK();

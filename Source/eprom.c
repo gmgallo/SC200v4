@@ -124,3 +124,21 @@ bool SaveConfig(sys_config_t* cfg)
 	return Eprom_Write(SYS_CONFIG_ADDRESS, cfg, sizeof(sys_config_t));
 }
 
+int PrintSysConfig(char* buffer, size_t size)
+{
+	sys_config_t config;
+
+	ReadConfig( &config);
+	size_t cnt = 0;
+
+	cnt += snprintf(buffer, size,       "Soft reset        : %s\n", (config.soft_reset != 0? "Yes": "No"));
+	cnt += snprintf(buffer+cnt, size-cnt,"No COM2 Log Init : %s\n",config.no_com2_logs_init != 0?  "True": "False");
+	cnt += snprintf(buffer+cnt, size-cnt,"IMU Type         : %s\n", GetImuTypeName(config.imu_type));
+	cnt += snprintf(buffer+cnt, size-cnt,"IMU Connected to : %s\n", GetImuConnectName(config.imu_connect));
+	cnt += snprintf(buffer+cnt, size-cnt,"Enable INS (SPAN): %s\n",  (config.enable_ins != 0? "Yes": "No"));
+	cnt += snprintf(buffer+cnt, size-cnt,"IMU ACCEL Scale  : %.3f\n",  config.imu_accel_scale);
+	cnt += snprintf(buffer+cnt, size-cnt,"IMU GYRO Scale   : %.3f\n",  config.imu_gyro_scale);
+
+	return cnt;
+}
+

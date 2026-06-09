@@ -982,8 +982,10 @@ void UpdateBestPosition(void* vp)
 	lastpos.Hgt = ((BESTPOS_t*)vp)->Hgt;
 	lastpos.PosValid = ((BESTPOS_t*)vp)->SolStatus == SOL_VALID? POSTYPE_GEO: POSTYPE_INVALID;
 
+	// 10 or 20 Hz real time position update.
 	InterlockPosCopy((pposition_t) &LastPosition, (pposition_t) &lastpos );
 
+	//this is for NAV logging 
 	if ((++poscounter % POS_DECIMATOR) == 0)
 		LogNovatelMessage((uint8_t*)vp, sizeof(BESTPOS_t));
 }

@@ -41,9 +41,9 @@ inline int hex2bin(char c)  { return ((c >= 'a') ? c - 'W' : ((c >= 'A') ? c - '
 	#if __GNUC_PREREQ (4, 3)
 	static __inline unsigned short _bswap16(unsigned short __bsx) { return __builtin_bswap16 (__bsx);  }
 	static __inline unsigned int   _bswap32(unsigned int __bsx)   { return __builtin_bswap32 (__bsx);  }
-	#elif
-	inline uint16_t ToEndian16(uint16_t a) { return (a >> 8) | (a << 8); }
-	inline uint32_t ToEndian32(uint32_t a) { return (a >> 24) | ((a & 0xff0000) >> 8) | ((a & 0xff00)<<8) | ((a & 0xff)<<24); }
+	#else
+	static __inline uint16_t ToEndian16(uint16_t a) { return (a >> 8) | (a << 8); }
+	static __inline uint32_t ToEndian32(uint32_t a) { return (a >> 24) | ((a & 0xff0000) >> 8) | ((a & 0xff00)<<8) | ((a & 0xff)<<24); }
 	#endif
 #endif
 

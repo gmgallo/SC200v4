@@ -375,8 +375,8 @@ size_t GetIMUStatusStr(char*buffer, size_t size)
 
 		memcpy(&S, (FSAS_Status*)&IMUStatus, sizeof(FSAS_Status));
 
-		cnt = snprintf(buffer, size, "IMU records: %.6ld, CRC Errors: %ld, Records skipped: %ldf\n"\
-									"IMU Status: %.4Xh, HW Errors: %ld, HW Error: %.4Xh Last HW Error: %.4Xh\n"\
+		cnt = snprintf(buffer, size, "IMU records: %.6lu, CRC Errors: %lu, Records skipped: %luf\n"\
+									"IMU Status: %.4Xh, HW Errors: %lu, HW Error: %.4Xh Last HW Error: %.4Xh\n"\
 									"ClockDif: %.1lf ClockAdj: %.3lf\n",
 				S.Records_Received,
 				S.Crc_Errors,
@@ -422,7 +422,7 @@ size_t GetIMUStatusShort(char*buffer, size_t size)
 
 		memcpy(&S, (FSAS_Status*)&IMUStatus, sizeof(FSAS_Status));
 
-		cnt = snprintf(buffer, size,"%d,%.4Xh,%.4Xh,%ld,%ld,%ld,%lu,%c,",
+		cnt = snprintf(buffer, size,"%d,%.4Xh,%.4Xh,%lu,%lu,%lu,%lu,%c,",
 				(int)IMAR_FSAS,
 				S.IMU_Status,
 				S.HW_Error,
@@ -520,6 +520,7 @@ void SetImuDataFormat(imu_format_t format)
 	case INVALID_FORMAT:
 	case fmtNOVATEL_RAW: /* DEFAULT Format compatible with OEM7700 receiver logs */
 		_FormatImuRecord = Format_FSAS_SN_to_NovatelRawSX;
+		KVH_ImuFormat = fmtNOVATEL_RAW;
 		PrintWithTime("IMU data format set to NOVATEL_RAW.\n");
 		break;
 
@@ -530,7 +531,7 @@ void SetImuDataFormat(imu_format_t format)
 
 	case fmtNOVATEL_IMR: /* format incompatible with OEM7700 receiver logs */
 		_FormatImuRecord = Format_FSAS_SN_to_txINS;
-		KVH_ImuFormat = fmt_KVH;
+		KVH_ImuFormat = fmtNOVATEL_IMR;
 		PrintWithTime("IMU data format set to NOVATEL IMR.\n");
 		break;
 
