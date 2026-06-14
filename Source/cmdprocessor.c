@@ -1283,7 +1283,7 @@ char *imufreq_cmd(char**tokens, int cnt, _ports_t port)
 {
 	if (cnt < 2)
 	{
-		snprintf(CmdAnswer, ARRAY_SIZE(CmdAnswer),"IMUFREQ %lf\n", IMU_Clock);
+		snprintf(CmdAnswer, ARRAY_SIZE(CmdAnswer),"IMUFREQ %lf\n", IMU_Frequency);
 		return CmdAnswer;
 	}
 	int32_t freq;

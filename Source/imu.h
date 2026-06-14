@@ -25,7 +25,7 @@ extern volatile bool IMU_init;
 extern volatile bool IMU_NoGo;
 extern volatile bool Enable_IMU_Logging;
 
-extern volatile double IMU_Clock;
+extern volatile double IMU_Frequency;
 
 typedef enum
 {

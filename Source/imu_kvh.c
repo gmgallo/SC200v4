@@ -86,10 +86,10 @@ void KVH_ExitConfigMode()
 *----------------------------------------------------------------------*/
 
 double kvh_accel_scale = 32768.0;
-double kvh_gyro_scale =  528037904.0; 
+double kvh_gyro_scale =  528037876.957f;	// this is the scale factor to convert radians to counts at 200hz
 
 /* scale factors to convert floating point IMU data to integer counts */
-static inline int32_t RADIANS_TO_COUNT(float r) { return (int32_t)(r*kvh_gyro_scale*imuFrequency); }	// pRIOR 60849.543863f
+static inline int32_t RADIANS_TO_COUNT(float r) { return (int32_t)(r*kvh_gyro_scale); }	// pRIOR 60849.543863f
 static inline int32_t ACCEL_TO_COUNT(float g)   { return (int32_t)(g*kvh_accel_scale); }		// convert g accel to counts.
 
 uint32_t kvh_uart_error = 0;

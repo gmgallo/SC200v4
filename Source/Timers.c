@@ -257,7 +257,7 @@ void USec_Timer_Isr(void)
 
 			ClockDif = USTIMER_CLK - tcap;
 
-			CountAdjust = ClockDif / IMU_Clock;  // incremental time adjust for each IMU trigger
+			CountAdjust = ClockDif / IMU_Frequency;  // incremental time adjust for each IMU trigger
 			AdjutAccum = 0;
 			t_mark = 0.0;
 

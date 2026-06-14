@@ -39,7 +39,7 @@
 /****************************************************************************
 *IMU GLOBALS
 *****************************************************************************/
-volatile double IMU_Clock = DEFAULT_IMU_FREQUENCY;	// Default to 200Hz used when PSOC handles the IMU
+volatile double IMU_Frequency = DEFAULT_IMU_FREQUENCY;	// Default to 200Hz used when PSOC handles the IMU
 
 volatile bool IMU_online = false;
 volatile bool IMU_init = false;
@@ -186,11 +186,11 @@ void Set_IMU_Trigger_Frequency(uint32_t _frequency)
 	/* prevent out of valid range settings */
 
 	if (_frequency > MAX_IMU_FREQUENCY )
-		_frequency = 200;
+		_frequency = DEFAULT_IMU_FREQUENCY;
 	else if (_frequency < 1 )
 		_frequency = 1;
 
-	IMU_Clock = _frequency; // update to have accurate imu records time tagging.
+	IMU_Frequency = _frequency; // update to have accurate imu records time tagging.
 
 	int j = ComposeMarkOutCommand(buf, ARRAY_SIZE(buf), 1, _frequency, 10, false);
 	Uart_Oem7700_Send((uint8_t*)buf,j);
@@ -201,7 +201,7 @@ void Stop_IMU_Trigger_Frequency()
 	char buf[100];
 	int j = ComposeMarkOutDisable(buf, ARRAY_SIZE(buf), 1);
 	Uart_Oem7700_Send((uint8_t*)buf,j);
-	IMU_Clock = 0;
+	IMU_Frequency = 0;
 }
 
 
@@ -240,7 +240,7 @@ bool Init_IMU_Interface(imu_type_t Type, imu_target_t Target)
 	{
 		Init_STIM_TOV_Detect( Target );
 
-		IMU_Clock = 125.0;						// 125Hz
+		IMU_Frequency = 125.0;						// 125Hz
 
 		if(Target == Target_NovAtel )			// do STIM300 initialization
 		{
