@@ -8,16 +8,10 @@
  *
  * Rev. 3.1: Oct 2024
  */
-
-#ifndef SOURCE_IMU_STIM_H_
-#define SOURCE_IMU_STIM_H_
-
-
-#include "globaldefs.h"
-#include "Novatel.h"
+#pragma once
+#include "system.h"
 
 #pragma pack(push,1)
-
 
 /*-----------------------------------------------------------------------------------------------------------------
  *  STIM300 IMU - Diagnostics
@@ -63,8 +57,6 @@ typedef struct _st_stim_as
 #define STIM_RECORD_SIZE sizeof(STIM_A5_t)
 #define STIM_A5_DG_ID	0xA5
 
-#pragma pack(pop)
-
 typedef enum
 {
 	x_channel 		= 0x01,
@@ -93,4 +85,4 @@ int GetStimStatus(char* buf, int len);
 
 void InitBaudsMonitor(); // for debug
 
-#endif /* SOURCE_IMU_STIM_H_ */
+#pragma pack(pop)

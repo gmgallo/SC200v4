@@ -5,7 +5,7 @@
  *      Author: Guillermo
  */
 #include "common.h"
-#include "gpio.h"
+
 
 /****************************************************************************
 * J6 Connector Input pin change detect

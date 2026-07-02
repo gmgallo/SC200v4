@@ -7,38 +7,24 @@
  *  Created on: Sep 10, 2021
  *      Author: G. Gallo
  *--------------------------------------------------------*/
+#pragma once
 
-#ifndef COMMON_H_
-#define COMMON_H_
+#include "system.h"
 
-#include <stdio.h>
-#include <ctype.h>
-#include <string.h>
-#include <stdlib.h>
-#include <string.h>
-
-#include "cy_pdl.h"
-#include "cyhal.h"
-#include "cybsp.h"
+/*--------------------------------------------------------- project includes */
 #include "eprom.h"
-
-/*--------------------------------- project includes */
-#include "globaldefs.h"
+#include "imu.h"
 #include "cfifo.h"
 #include "gpio.h"
 #include "nmea.h"
 #include "Uarts.h"
 #include "Timers.h"
 #include "Novatel.h"
-#include "imu.h"
-#include "imu_stim.h"
-#include "imu_kvh.h"
 #include "usb_cdc.h"
-#include "retarget_console.h"
 #include "cmdprocessor.h"
+#include "retarget_console.h"
 
 /*------------------------------------------------------------ Dictionary */
-
 typedef struct
 {
 	const int 	key;
@@ -82,7 +68,6 @@ static inline void ConfigureInterruptGPIO(const cy_stc_sysint_t* pintr_config, c
 }
 
 
-
 /************************************************************************************* main.c */
 extern const char VersionString[];
 extern const char _consoleHeader[];
@@ -98,5 +83,3 @@ void PurgeBuffers();
 
 void StoreReportRecord( dbuf_t *buf, _ports_t port);
 void PrintWithTime(const char *msg);
-
-#endif /* COMMON_H_ */

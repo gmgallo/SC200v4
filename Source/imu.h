@@ -9,11 +9,10 @@
  * Rev.3.1: Oct. 2024
  */
 
-#ifndef IMU_H_
-#define IMU_H_
-
-#include "common.h"
-//#include "Novatel.h"
+ #pragma once
+#include "system.h"
+#include "imu_kvh.h"
+#include "imu_stim.h"
 
 #pragma pack(push,1)
 
@@ -26,24 +25,6 @@ extern volatile bool IMU_NoGo;
 extern volatile bool Enable_IMU_Logging;
 
 extern volatile double IMU_Frequency;
-
-typedef enum
-{
-	IMUType_INVALID = 0,
-	IMUType_FSAS 	= 1,
-	IMUType_STIM300 = 2,
-	IMUType_KVH		= 3,
-
-} imu_type_t;
-
-typedef enum
-{
-	Target_INVALID  = 0,
-	Target_PSOC 	= 1,
-	Target_NovAtel 	= 2,
-
-} imu_target_t;
-
 extern const tkeywrd_t ImuTypeList[];
 extern const size_t    ImuTypeCount;
 
@@ -107,17 +88,6 @@ void Stop_IMU_Trigger_Frequency();
 #define MIN_IMU_FREQUENCY	  (100U)	// 100 Hertz min frequency without FSAS IMU errors
 #define MAX_IMU_FREQUENCY	  (1000U)	// 1000 Hertz (1 ms period for 921600 baud) max frequency without IMU errors
 #define DEFAULT_IMU_FREQUENCY (200U)	// Standard 200Hz frequency for IMU trigger output and data reporting
-
-typedef enum
-{
-	INVALID_FORMAT = 0,
-	fmtFSAS_NATIVE = 1,
-	fmtNOVATEL_RAW = 2,		// == RAWIMUSX Default logging format for Inertial Explorer processing
-	fmtNOVATEL_IMR = 3,		// Novatel neutral format
-	fmt_STIM300	   = 4,
-	fmt_KVH		   = 5,
-
-} imu_format_t;				// This is the IMU format to report to the logger app
 
 /****************************************************************************
  * SetImuDataFormat()
@@ -221,5 +191,3 @@ typedef struct tTxINS
 extern volatile bool DisableImuLogs;
 
 #pragma pack(pop)
-
-#endif /* IMU_H_ */

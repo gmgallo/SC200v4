@@ -6,7 +6,6 @@
  */
 #include "common.h"
 
-
 uint32_t kvh_crc(const void* data, size_t data_len);
 
 char* kvh_test_cmd = "=BIT\n";
@@ -184,6 +183,8 @@ void Format_KVH_to_NovatelRawSX( PKVH_MSG pmsg )
 		},
 	};
 
+    #define RAWKVHIMU_ID 1460
+
 	_RawImuSX.Hdr.gpsweek = UsecEventTime.GPSWeek;
 	_RawImuSX.Hdr.gpsmsec = UsecEventTime.WeekMilliSeconds; 
 
@@ -211,6 +212,53 @@ void Format_KVH_to_NovatelRawSX( PKVH_MSG pmsg )
 	Send_IMU_Record( (void*)&_RawImuSX, sizeof(RAWIMUSX_t));
 }
 
+/****************************************************************************
+ * Format_KVH_Native() - Resembles Novatel RAWIMUSX format, 
+ * but with float values for accel and gyro instead of int32_t counts.
+ ****************************************************************************/
+void Format_KVH_Native( PKVH_MSG pmsg )
+{
+	RAWKVHIMU_t _RawImuSX =		// defined in Novatel.h
+	{
+		.Hdr = // short header
+		{
+			.sync1  = NOVATEL_SYNC1,
+			.sync2  = NOVATEL_SYNC2,
+			.sync3  = NOVATEL_SYNC3_SHORT,
+			.msglen = RAWIMUSX_MSG_LENGTH,
+			.msgid  = RAWKVHIMU_ID          // use a different ID for native KVH format
+		},
+	};
+ 
+	_RawImuSX.Hdr.gpsweek = UsecEventTime.GPSWeek;
+	_RawImuSX.Hdr.gpsmsec = UsecEventTime.WeekMilliSeconds; 
+
+    uint32_t status = pmsg->Status;
+    uint32_t cnt = pmsg->Sequence;
+    uint32_t temp = pmsg->Temp;
+    uint32_t nstat = (((temp << 8) | cnt) << 8) | status;
+
+	_RawImuSX.imu_info   = status == 0x77? 4 : 1;	// Bit 0 gl
+	_RawImuSX.imu_type   = KVH_1750;
+	_RawImuSX.imu_status = nstat;   // combine sequence and status in the imu_status
+    _RawImuSX.gnss_week    = UsecEventTime.GPSWeek;
+	_RawImuSX.week_seconds = UsecEventTime.WeekSeconds;		// a double in full seconds
+
+	_RawImuSX.z_accel  = pmsg->Zaccel;
+    _RawImuSX._y_accel = pmsg->Yaccel;
+	_RawImuSX.x_accel  = pmsg->Xaccel;
+
+	_RawImuSX.z_gyro  = pmsg->Zgyro;	
+    _RawImuSX._y_gyro = pmsg->Ygyro;
+	_RawImuSX.x_gyro  = pmsg->Xgyro;
+
+	_RawImuSX.crc = CalculateBlockCRC32( RAWIMUSX_CRC_OFFSET, (void*)&_RawImuSX );
+
+	Send_IMU_Record( (void*)&_RawImuSX, sizeof(RAWKVHIMU_t));
+}
+
+
+
 void Decode_KVH_Datagram()
 {
     uint32_t* p = (uint32_t*)kvh_msg_buf;
@@ -234,9 +282,10 @@ void Decode_KVH_Datagram()
         {
             Format_KVH_to_NovatelRawSX(pmsg);
         }
-        else if (KVH_ImuFormat == fmt_KVH)
+        else if (KVH_ImuFormat == fmt_KVH_NATIVE)
         {
-            Send_IMU_Record( (void*)pmsg, sizeof(kvh_msg_t));
+            Format_KVH_Native(pmsg);
+          //  Send_IMU_Record( (void*)pmsg, sizeof(kvh_msg_t));
         }   
     }
 }

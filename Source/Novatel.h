@@ -4,10 +4,8 @@
  *  Created on: Nov 4, 2021
  *      Author: Guillermo
  */
-#ifndef NOVATEL_H_
-#define NOVATEL_H_
-
-#include "globaldefs.h"
+#pragma once
+#include "system.h"
 
 #pragma pack(push,1)
 
@@ -15,7 +13,6 @@
 extern volatile uint16_t GPS_Week;
 extern volatile uint32_t GPS_WeekSeconds;
 extern volatile bool     Enable_GNSS_Logging;
-
 /*------------------------------------------------------------------------*/
 
 typedef enum
@@ -749,5 +746,3 @@ bool MapLadyBugLogs(const char* port); 	// returns true on error
 bool RequestGpsLog(const char* log);		// returns true on error
 
 #pragma pack(pop)
-
-#endif /* NOVATEL_H_ */

@@ -49,7 +49,6 @@ const char _consoleHeader[] ="\r\n"
 
 sys_config_t SysConfig;
 
-
 /********************************************************************************************
 *                                                                                           *
 *   PINS AND PERIPHERALS - CY8CPROTO-062-4343W BOARD  | AP1050 INTERFACE BOARD              *
@@ -612,17 +611,17 @@ int main(void)
 					Uart_COM_Send(R->Dbuf.Buffer, R->Dbuf.Count);
         		}
         		else if (R->Port == USB_COM1)
-					{
-						Send_USB_CDC_Data(USBUART_COM1, R->Dbuf.Buffer, R->Dbuf.Count);
-					}
-					else if (R->Port == USB_COM2)
-						{
-							Send_USB_CDC_Data(USBUART_COM2, R->Dbuf.Buffer, R->Dbuf.Count);
-						}
-						else if (R->Port == UART_CONSOLE )
-							{
-								printf((char*) R->Dbuf.Buffer );
-							}
+				{
+					Send_USB_CDC_Data(USBUART_COM1, R->Dbuf.Buffer, R->Dbuf.Count);
+				}
+				else if (R->Port == USB_COM2)
+				{
+					Send_USB_CDC_Data(USBUART_COM2, R->Dbuf.Buffer, R->Dbuf.Count);
+				}
+				else if (R->Port == UART_CONSOLE )
+				{
+					printf((char*) R->Dbuf.Buffer );
+				}
         	}
         }
         Monitor_USB_CDC_Status();	// can't reconnect from an ISR

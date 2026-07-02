@@ -7,7 +7,7 @@
 
 #ifndef SOURCE_DMACFG_H_
 #define SOURCE_DMACFG_H_
-
+#include "system.h"
 
 /*******************************************************************************
 *         DMA config structures

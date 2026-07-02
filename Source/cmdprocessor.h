@@ -4,11 +4,8 @@
  *  Created on: Jun 23, 2022
  *      Author: Guillermo
  */
-
-#ifndef CMDPROCESSOR_H_
-#define CMDPROCESSOR_H_
-
-#include "common.h"
+ #pragma once
+#include "system.h"
 
 /************************************************************* PORTS */
 
@@ -36,6 +33,4 @@ void PostAssyncMessage(uint8_t *buf, int cnt, _ports_t receiver);
 int find_KeywordConstant ( const tkeywrd_t* , size_t , const char* );
 const char* find_KeywordName ( const tkeywrd_t*, size_t, const int );
 
-
-#endif /* CMDPROCESSOR_H_ */
 

@@ -17,14 +17,12 @@
 		of the endpoint buffers allocated in the USB Configurator.
  *
  */
-
 #include "common.h"
-
 #include "cy_usb_dev.h"
 #include "cycfg_usbdev.h"
 
 //#define DEBUG_USB_ISR
-//#define	DEBUG_USB_TP	_TP1
+//#define DEBUG_USB_TP	_TP1
 
 /*******************************************************************************
 * Macros

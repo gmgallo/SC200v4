@@ -7,7 +7,6 @@
  *      Author: Guillermo
  */
 #include "common.h"
-#include "cy_pdl.h"
 
 /*--------------------------------------------------------------- PORTS*/
 typedef struct
@@ -16,7 +15,6 @@ typedef struct
 	_ports_t		id;
 
 }port_ids_t;
-
 
 const port_ids_t PortNames[] =
 {
@@ -1328,7 +1326,6 @@ char *imuformat_cmd(char**tokens, int cnt, _ports_t port)
 		return PrintCmdError( "Missing FORMAT argument." );
 	}
 	int format = find_KeywordConstant( ImuFormatsDictionary, ImuFormatsCount, tokens[1]);
-
 
 	if ( format == NOT_FOUND )
 	{
@@ -2743,7 +2740,7 @@ char *imu_console_cmd(char**tokens, int cnt, _ports_t port)
 }
 
 /*------------------------------------------------------------------------------------- IMUERRORS */
-char *imu_errors_cmd(char**, int, _ports_t)
+char *imu_errors_cmd(char** tokens, int cnt, _ports_t port)
 {
 	GetUartErrorStr(CmdAnswer, sizeof(CmdAnswer), Uart_IMU_Error);
 	Uart_IMU_Error = 0;

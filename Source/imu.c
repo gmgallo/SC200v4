@@ -83,7 +83,7 @@ const tkeywrd_t ImuFormatsDictionary[] =
 	{"NRAW", fmtNOVATEL_RAW},		// default to be consistent with other logs form OEM7700 receiver
 	{"NIMR", fmtNOVATEL_IMR},		// IMR format not used
 	{"STIM", fmt_STIM300},			// For debugging only
-	{"KVH", fmt_KVH},				// For debugging only
+	{"KVH",  fmt_KVH_NATIVE},		// For debugging only EMULATES NOVATEL RAW IMU FORMAT with float values for accel and gyro 
 };
 
 const size_t ImuFormatsCount = DICTIONARY_SIZE(ImuFormatsDictionary);
@@ -531,7 +531,7 @@ void SetImuDataFormat(imu_format_t format)
 
 	case fmtNOVATEL_IMR: /* format incompatible with OEM7700 receiver logs */
 		_FormatImuRecord = Format_FSAS_SN_to_txINS;
-		KVH_ImuFormat = fmtNOVATEL_IMR;
+		//KVH_ImuFormat = fmtNOVATEL_IMR;							// not implemented
 		PrintWithTime("IMU data format set to NOVATEL IMR.\n");
 		break;
 
@@ -541,9 +541,9 @@ void SetImuDataFormat(imu_format_t format)
 			PrintWithTime("STIM300 data format not implemented.\n");
 			break;
 		}
-	case fmt_KVH:
+	case fmt_KVH_NATIVE:
 		{
-			KVH_ImuFormat = fmt_KVH;
+			KVH_ImuFormat = fmt_KVH_NATIVE;
 			PrintWithTime("KVH IMU format selected.\n");
 			break;
 		}

@@ -8,7 +8,7 @@
 #ifndef SOURCE_CFIFO_H_
 #define SOURCE_CFIFO_H_
 
-#include "globaldefs.h"
+#include "system.h"
 
 /*-------------------------------------------------------------------- Common data structures  */
 typedef void* DBUF_HANDLE;		 // ring buffer handle

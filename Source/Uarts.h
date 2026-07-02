@@ -8,34 +8,11 @@
 #ifndef UART_H_
 #define UART_H_
 
-#include "globaldefs.h"
+#include "common.h"
 
 typedef void (*fnMessageProcessor)(uint8_t* txBuffer, size_t count);
 
 typedef uint32_t (*fnMessageProcessor_2)(uint8_t* txBuffer, size_t count);
-
-typedef enum // Predefined UART baud rates
-{
-	B115200 = 0,
-	B230400 = 1,
-	B460800 = 2,
-	B921600 = 3,
-} bauds_t;
-
-
-typedef enum _Ports 	// port ID bit fields
-{
-	INVALID_PORT = 0X00,
-	UART_COM1    = 0x01,
-	USB_COM1 	 = 0x02,
-	USB_COM2	 = 0x04,
-	UART_OEM7700 = 0x08,
-	UART_CONSOLE = 0x10,
-	UART_IMU	 = 0x20,
-	UART_J6		 = 0x40,
-
-}_ports_t;
-
 
 const char* GetPortName(_ports_t port);		/* defined in cmdprocessor.c */
 

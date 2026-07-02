@@ -1,7 +1,7 @@
 # https://clangd.llvm.org/config.html
 # Workspace parsing disabled - extension remains active
 Index:
-  Background: Off
+  Background: Build
 
 Completion:
   HeaderInsertion: Never

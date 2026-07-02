@@ -4,11 +4,11 @@
  *  Created on: Apr 19, 2025
  *      Author: Guillermo
  */
-#include "common.h"
 
 #ifndef _GPIO_H_
 #define _GPIO_H_
 
+#include "system.h"
 
 // ----------------------------------------------- Defines also in globaldefs.h
 #ifndef _GPIO_CONTROL_

@@ -7,7 +7,6 @@
 
 #include "common.h"
 
-
 #define EPROM_ERROR	  (eepromReturnValue != CY_EM_EEPROM_SUCCESS) // TRUE on Error
 #define EPROM_INIT_OK (eepromReturnValue == CY_EM_EEPROM_SUCCESS)
 

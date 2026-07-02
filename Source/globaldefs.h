@@ -10,6 +10,8 @@
 
 #ifndef GLOBALDEFS_H_
 #define GLOBALDEFS_H_
+#include <stdint.h>
+#include <stdbool.h>
 
 #define SC_RESULT_OK (0)
 
@@ -38,7 +40,7 @@ inline int dec2bin(char c)  { return c - '0'; }
 inline int hex2bin(char c)  { return ((c >= 'a') ? c - 'W' : ((c >= 'A') ? c - '7' : c - '0')); }
 
 #ifdef __GNUC__
-	#if __GNUC_PREREQ (4, 3)
+	#if __GNUC_PREREQ (4, 2)
 	static __inline unsigned short _bswap16(unsigned short __bsx) { return __builtin_bswap16 (__bsx);  }
 	static __inline unsigned int   _bswap32(unsigned int __bsx)   { return __builtin_bswap32 (__bsx);  }
 	#else
@@ -64,5 +66,57 @@ inline int hex2bin(char c)  { return ((c >= 'a') ? c - 'W' : ((c >= 'A') ? c - '
 #define SI_TP2			P3_4		OUT
 #define SI_TP3			P7_3		OUT
 ------------------------------------------------------------------------------*/
+
+/*----------------------------------------- serial ports */
+typedef enum _Ports 	// port ID bit fields
+{
+	INVALID_PORT = 0X00,
+	UART_COM1    = 0x01,
+	USB_COM1 	 = 0x02,
+	USB_COM2	 = 0x04,
+	UART_OEM7700 = 0x08,
+	UART_CONSOLE = 0x10,
+	UART_IMU	 = 0x20,
+	UART_J6		 = 0x40,
+
+}_ports_t;
+
+typedef enum // Predefined UART baud rates
+{
+	B115200 = 0,
+	B230400 = 1,
+	B460800 = 2,
+	B921600 = 3,
+} bauds_t;
+
+/*------------------------------------- imu types */
+typedef enum
+{
+	IMUType_INVALID = 0,
+	IMUType_FSAS 	= 1,
+	IMUType_STIM300 = 2,
+	IMUType_KVH		= 3,
+
+} imu_type_t;
+
+typedef enum
+{
+	Target_INVALID  = 0,
+	Target_PSOC 	= 1,
+	Target_NovAtel 	= 2,
+
+} imu_target_t;
+
+typedef enum
+{
+	INVALID_FORMAT = 0,
+	fmtFSAS_NATIVE = 1,
+	fmtNOVATEL_RAW = 2,		// == RAWIMUSX Default logging format for Inertial Explorer processing
+	fmtNOVATEL_IMR = 3,		// Novatel neutral format
+	fmt_STIM300	   = 4,
+	fmt_KVH_NATIVE = 5,
+
+} imu_format_t;				// This is the IMU format to report to the logger app
+
 
 #endif /* GLOBALDEFS_H_ */

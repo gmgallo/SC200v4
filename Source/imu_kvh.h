@@ -4,14 +4,11 @@
  * Copyright (C) 2024 - 2026 - G2 Airborne Systems.
  * Version 1.00 - Mar. 2026 - Initial development of KVH IMU support.
  */
-
-#ifndef KVH_H
-#define KVH_H
- 
-#include "common.h"
+#pragma once
+#include "system.h"
+#include "Novatel.h"
 
 #pragma pack(push,1)
-
 
 /*--------------------------------------
  *KVH Data format
@@ -28,7 +25,6 @@ typedef enum _Tag_Kvh
 	KVH_MSG_BYTE3 = 0x55,
 
 } KVH_HEADERS;
-
 
 typedef struct
 {
@@ -67,6 +63,32 @@ typedef struct// ALL DATA IS RECEIVED IN BIG ENDIAN FORMAT
 
 #define KVH_RECORD_SIZE sizeof(kvh_msg_t)
 
+/*
+ * RAW KVH IMU data format 
+ * Uses the same structure as RAWIMUSX_t, but with float values 
+ *for accel and gyro instead of int32_t counts.
+ */
+typedef struct _raw_imu_kvh // ID 1462 (OEM7 pag. 1123)
+{
+	span_short_hdr	Hdr;			// Short header
+
+	uint8_t			imu_info;		// from IMU info enum above
+	uint8_t			imu_type;		// from IMU_Type enum above
+	uint16_t		gnss_week;
+	double			week_seconds;	// This is more precise than milliseconds from header
+	uint32_t		imu_status;
+	float			z_accel;
+	float			_y_accel;		// Minus accel Y
+	float			x_accel;
+	float			z_gyro;			// change in angle conts right hand
+	float			_y_gyro;		// Minus change in angle around Y axis
+	float			x_gyro;
+
+	uint32_t		crc;
+
+} RAWKVHIMU_t; // size 56 bytes
+
+#define RAWKVHIMU_ID 1460
 
 extern imu_format_t KVH_ImuFormat;
 
@@ -81,5 +103,3 @@ void KVH_SendConfigCommand(const char_t* cmd);
 void Receive_KVH_Datagram(uint8_t* buffer, size_t cnt);
 
 #pragma pack(pop)
-
-#endif /* KVH_H */    
