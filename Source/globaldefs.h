@@ -118,5 +118,9 @@ typedef enum
 
 } imu_format_t;				// This is the IMU format to report to the logger app
 
+/*------------------------------ smoth filters defaults */
+#define DEFAULT_VELOCITY_SMOOTH_FACTOR  0.25
+#define DEFAULT_ACCEL_SMOOTH_FACTOR  	0.25
+#define DEFAULT_SPEED_CUTOFF         	0.1		/*m/s*/
 
 #endif /* GLOBALDEFS_H_ */

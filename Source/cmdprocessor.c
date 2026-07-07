@@ -166,6 +166,7 @@ char *benchmark_cmd(char**,int,_ports_t);
 char *standby_cmd(char**,int,_ports_t);
 char *gnss_log_cmd(char**, int, _ports_t);
 char *pos_report_cmd(char**, int, _ports_t);
+char *delta_dist_report_cmd(char** tokens, int cnt, _ports_t port);
 char *marktime_report_cmd(char**, int, _ports_t);
 char *markpos_report_cmd(char** tokens, int cnt, _ports_t port);
 char *map_ladybug_report_cmd(char** tokens, int cnt, _ports_t port);
@@ -200,34 +201,35 @@ typedef struct
 
 const fn_dictionary_t CmdDictionary[] =
 {
-		{"LOG", 		log_cmd},
-		{"VERSIONINFO", version_cmd},
-		{"STATUS",		status_cmd},
-		{"SHORTSTATUS",	status_cmd},		// sends short status <STATUS,a,b,c,d...x>\r
-		{"ECHO",		echo_cmd},
-		{"IMUFREQ",		imufreq_cmd},
-		{"IMUFORMAT",	imuformat_cmd},
-		{"IMUTYPE",		imutype_cmd},
-		{"IMUCONNECT",	imuconnect_cmd},
-		{"IMUACCELSCALE", imuaccel_scale_cmd},
-		{"IMUGYROSCALE", imugyro_scale_cmd},
-		{"SYSTEMRESET", system_reset_cmd},
-		{"SYSCONFIG", 	sysconfig_cmd},
+		{"LOG", 			log_cmd},
+		{"VERSIONINFO", 	version_cmd},
+		{"STATUS",			status_cmd},
+		{"SHORTSTATUS",		status_cmd},		// sends short status <STATUS,a,b,c,d...x>\r
+		{"ECHO",			echo_cmd},
+		{"IMUFREQ",			imufreq_cmd},
+		{"IMUFORMAT",		imuformat_cmd},
+		{"IMUTYPE",			imutype_cmd},
+		{"IMUCONNECT",		imuconnect_cmd},
+		{"IMUACCELSCALE", 	imuaccel_scale_cmd},
+		{"IMUGYROSCALE", 	imugyro_scale_cmd},
+		{"SYSTEMRESET", 	system_reset_cmd},
+		{"SYSCONFIG", 		sysconfig_cmd},
 		{"STANDBY",		standby_cmd},
-		{"PORTID",		port_id_cmd},
-		{"?",			help_id_cmd},
+		{"PORTID",			port_id_cmd},
+		{"?",				help_id_cmd},
 		{"COPYCONSOLE",	copy_console_cmd},
-		{"POSREPORT", 	pos_report_cmd},			// Send periodic position reports
+		{"POSREPORT", 		pos_report_cmd},		// Send periodic position reports
+		{"DELTADISTREPORT", delta_dist_report_cmd},	// Send periodic delta distance reports
 		{"MARKTIMEREPORT", marktime_report_cmd},	// Send  reports
-		{"MARKPOSREPORT",  markpos_report_cmd},		// Send  reports
-		{"MAPLBREPORT",    map_ladybug_report_cmd},	// Send Ladybug GPS logs to PORT#
+		{"MARKPOSREPORT",  markpos_report_cmd},	// Send  reports
+		{"MAPLBREPORT",    map_ladybug_report_cmd},// Send Ladybug GPS logs to PORT#
 		{"REQUESTGPSLOG",  request_gps_log_cmd},	// Send Ladybug GPS logs to PORT#
 
 		{"SETPIN",  		set_pin_cmd},			// SET port pin high or low
 		{"WRITEPIN",  		set_pin_cmd},			// SET port pin high or low
 		{"PULSEPIN",  		pulse_pin_cmd},			// Pulse port pin
 		{"READPIN", 		read_pin_cmd},			// read port pin
-		{"MONITORPIN", 		monitor_pin_cmd},		// read port pin
+		{"MONITORPIN", 	monitor_pin_cmd},		// read port pin
 		{"CANCELPINMONITOR",cancel_pin_monitor_cmd},
 
 		/* debug commands */
@@ -1049,6 +1051,127 @@ void Cancel_Pos_Reports()
 		StopPeriodicTask(&posreport_task);
 	}
 }
+
+/*------------------------------------------------------------------------------------- DELTADISTREPORT */
+/* Sends delta distance travel reports 
+ * 
+ * 	DELTADISTREPORT  [port] [action] [period]
+ *
+ * 	Parameters:
+ * 		port		- destination port. Default sender port
+ * 		action		- START or STOP		Default START
+ * 		period		- repetition period in meters (default 10 meters)
+ *----------------------------------------------------------------------------------------------------*/
+
+ _ports_t delta_dist_target = INVALID_PORT;
+ int32_t  delta_dist = 10; // default 10 meters
+
+char distreport_buf[200];
+GPT_TASK_t distreport_task =
+{
+	.thandle = INVALID_GPTIMER_HANDLE
+};
+
+double DistanceTravelled(double speed, double accel, double period)
+{
+	// distance = speed * time + 0.5 * accel * time^2
+	return (speed + 0.5 * accel * period) * period;
+}
+
+double TimeToDistance(double speed, double accel, double distance)
+{
+	// Solve the quadratic equation: 0.5 * accel * t^2 + speed * t - distance = 0
+	double a = 0.5 * accel;
+	double b = speed;
+	double c = -distance;
+
+	double discriminant = b * b - 4 * a * c;
+
+	if (discriminant < 0)
+	{
+		// No real solution, return a large time to indicate it's not reachable
+		return INFINITY;
+	}
+
+	double sqrt_discriminant = sqrt(discriminant);
+	double t1 = (-b + sqrt_discriminant) / (2 * a);
+	double t2 = (-b - sqrt_discriminant) / (2 * a);
+
+	// Return the positive time value
+	return (t1 > 0) ? t1 : t2;
+}
+
+void velocity_report_callback(pvelocity_rep_t vel)
+{
+	int cnt = snprintf(distreport_buf, ARRAY_SIZE(distreport_buf), 
+	"#DELTADIST,%.6lf,%.3lf,%.3lf,%.3lf,%.3lf\n", 
+	vel->WeekSeconds, 
+	vel->HorSpeed, 
+	vel->HorAccel, 
+	vel->VertSpeed, 
+	vel->VertAccel);
+
+	SendToPort(delta_dist_target, (uint8_t*)distreport_buf, cnt);
+}
+
+
+char *delta_dist_report_cmd(char** tokens, int cnt, _ports_t port)
+{
+	 delta_dist_target = port;		// default to calling port;
+	 action_t action = ACTION_START;
+
+	if ( cnt > 1 ) /* if no arguments use defaults above */
+	{
+			/* scan arguments */
+		for (int i = 1; i < cnt; i++ )
+		{
+			_ports_t _p = FindPortID(tokens[i]);
+
+			if (_p != INVALID_PORT)
+			{
+				delta_dist_target = _p;
+				continue;
+			}
+
+			action_t _a = find_Action(tokens[i]);
+			if (_a != ACTION_NONE)
+			{
+				action = _a;
+				continue;
+			}
+
+			int32_t _v;
+
+			if ( ToInt32(tokens[i], &_v) != 0 )
+			{
+				if(_v < MIN_POSITION_REPORT_PERIOD_MSEC)
+					delta_dist =  MIN_POSITION_REPORT_PERIOD_MSEC;
+				else if (_v > 0 )
+					delta_dist = _v;
+			}
+		}
+	}
+
+	if (action == ACTION_STOP)
+	{
+			printf("{%s} Stopping %s to %s\n", GetPortName(port), tokens[0], GetPortName(delta_dist_target) );
+			CancelVelocityReport();
+	}
+	else
+	{
+		RegisterVelocityReport(10, 
+			SysConfig.speed_cutoff, 
+			SysConfig.vel_smoth_factor, 
+			SysConfig.accel_smoth_factor,
+			 velocity_report_callback );
+	}
+
+}
+
+
+
+
+
 
 /*---------------------------------------------------------------------------- STATUS | SHORTSTATUS */
 /* command formats for both versions:

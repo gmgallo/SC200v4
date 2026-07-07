@@ -92,7 +92,7 @@
 #define BLOCKING_WRITE_MODE		NO_BLOCKING_WRITE
 #define CONFIG_MODE				CONFIG_SIMPLE_MODE
 #define FLASH_REGION_TO_USE     AUX_FLASH_REGION_32K
-#define EEPROM_SIZE				AUX_FLASH_SIZE 			/* 32KB */
+#define EEPROM_SIZE				(0x400) /* 1KB eprom */
 
 
 extern cy_en_em_eeprom_status_t eepromReturnValue;
@@ -119,9 +119,12 @@ typedef struct
 	int8_t enable_ins;			// for receivers with SPAN firmware
 	double imu_accel_scale;		// 0 = IMU default
 	double imu_gyro_scale;		// 0 = IMU default
+	double vel_smoth_factor;	// 0.25
+	double accel_smoth_factor;	// 0.25
+	double speed_cutoff;		// 0.1 m/s - ignore velocity below this value
 
-	//-------------------------- end payload
-	uint16_t Crc;			// Integrity check
+	//---------------------------------------------- end of payload
+	uint16_t Crc;				// Integrity check
 
 } sys_config_t;
 #pragma pack(pop)
@@ -130,6 +133,7 @@ extern sys_config_t SysConfig;		/* defined in main.c */
 
 bool ReadConfig(sys_config_t* cfg);
 bool SaveConfig(sys_config_t* cfg);
+bool LoadConfigDefaults(sys_config_t* pcfg);
 
 int PrintSysConfig(char* buffer, size_t size);
 

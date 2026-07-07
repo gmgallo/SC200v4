@@ -416,14 +416,7 @@ int main(void)
 
 	if ( ReadConfig(&SysConfig) ) /* true on error */
 	{
-		SysConfig.soft_reset = false;
-		SysConfig.no_com2_logs_init = false;
-		SysConfig.imu_type = DEFAULT_IMU_TYPE;
-		SysConfig.imu_connect = DEFAULT_IMU_TARGET;
-		SysConfig.imu_accel_scale = DEFAULT_IMU_SCALE;
-		SysConfig.imu_gyro_scale = DEFAULT_IMU_SCALE;
-		
-		SaveConfig(&SysConfig);
+		LoadConfigDefaults(&SysConfig);
 	}
 
 	if (SysConfig.imu_type == IMUType_INVALID || SysConfig.imu_connect == Target_INVALID )

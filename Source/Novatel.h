@@ -189,6 +189,7 @@ typedef enum
 	TIME_ID		= 101,		// OEM 7 Pag. 927
 	TIMESYNC_ID	= 492,		// OEM 7 Pag. 930
 	BESTPOS_ID	= 42,		// long header!
+	BESTVEL_ID	= 99,		// long header!
 	BESTUTM_ID	= 726,		// long header!
 
 	MARK1TIME_ID = 1130,	// MARKxTIME log (OEM7 pag. 663)
@@ -338,17 +339,24 @@ typedef enum __table89_Vel_Tpe
 	L1_FLOAT = 32,				//  Floating L1 ambiguity solution
 	IONOFREE_FLOAT = 33,		//  Floating ionospheric-free ambiguity solution
 	NARROW_FLOAT = 34,			//  Floating narrow-lane ambiguity solution
-	L1_INT = 48,				//  Integer L1 ambiguity solution
-	NARROW_INT = 50,			//  Integer narrow-lane ambiguity solution
-	OMNISTAR_HP = 64,			//  a OmniSTAR HP position
-	OMNISTAR_XP = 65,			//  a OmniSTAR XP or G2 position
-	PPP_CONVERGING = 68,		//  NovAtel CORRECT™ with PPP requires access to a suitable correction stream, delivered either through L-Band orthe Internet.
-	PPP = 69,					//   Converged TerraStar-C solution
+	L1_INT = 48,				//  Single-frequency RTK solution with carrier phase ambiguities resolved to integers
+	WIDE_INT = 49,				//  IMulti-frequency RTK solution with carrier phase ambiguities resolved to wide-lane integers
+	NARROW_INT = 50,			//  Multi-frequency RTK solution with carrier phase ambiguities resolved to narrow-lane integers
+	INS_SBAS = 52,				// INS position, where the last applied position update used a GNSS solution computed using corrections from an SBAS (WAAS) solution
+	INS_PSRSP =53,				// INS position, where the last applied position update used a single point GNSS (SINGLE) solution
+	INS_PSRDIFF = 54,			// INS position, where the last applied position update used a pseudorange differential GNSS (PSRDIFF) solution
+	INS_RTKFLOAT = 55,			// INS position, where the last applied position update used a floating ambiguity RTK (L1_FLOAT or NARROW_FLOAT) solution
+	INS_RTKFIXED = 56,			// INS position, where the last applied position update used a fixed ambiguity RTK (L1_INT, WIDE_INT, or NARROW_INT) solution
+	EXT_CONSTRAINED = 67,		// INS position, where the last applied position update used an external source (entered using the EXTERNALPVAS command)
+	PPP_CONVERGING = 68,		//  Converging TerraStar-C PRO or TerraStar-X solution via internet or satellite L Band link
+	PPP = 69,					//  Converging TerraStar-C PRO or TerraStar-X solution via internet or satellite L Band link  
 	OPERATIONAL = 70,			//  Solution accuracy is within UAL operational limit
 	WARNING = 71,				//  Solution accuracy is outside UAL operational limit but within warning limit
 	OUT_OF_BOUNDS = 72,			//  Solution accuracy is outside UAL limits
 	PPP_BASIC_CONVERGING = 77,	//  b Converging TerraStar-L solution
-	PPP_BASIC = 78				//  b Converged TerraStar-L solution
+	PPP_BASIC = 78,				//  b Converged TerraStar-L solution
+	INS_PPP_BASIC_CONVERGING = 79,	// INS position, where the last applied position update used a converging TerraStar-L PPP (PPP_BASIC) solution
+	INS_PPP_BASIC = 80,				// INS position, where the last applied position update used a converged TerraStar-L PPP (PPP_BASIC) solution
 
 }VEL_TYPE;
 
@@ -425,13 +433,30 @@ typedef struct _st_BestUTM
 
 } BESTUTM_t;
 
+/*--------------------------------------------------------- BESTVEL log */
+typedef struct _st_BestVel
+{
+	span_long_hdr	H;			// long header
+
+	int32_t			SolStatus;	// Solution status (table 88)
+	int32_t			VelType;	// Velocity type 
+	float			Latency;	// When present, the velocity time of validity is the time tag in the log minus the latency value.
+	float			Age;		// Differential age in seconds
+	double			HorSpeed;	// Horizontal speed over ground, in metres per second
+	double			TrkOverGnd;	// Actual direction of motion over ground (track over ground) with respect to True North, in degrees
+	double			VertSpeed;	// Vertical speed, in metres per second (+ = up, - = down)
+	float			_reserved_;
+
+	uint32_t		crc;
+
+} BESTVEL_t; // 72 bytes
+
 
 /*------------------------------------------------- 42 - INSPOS log
  * NOTE:
  * On systems with SPAN enabled, BESTPOS log contains the best available
  * combined GNSS and INS (If available) position computed by the receiver.
  */
-
 
 typedef enum _ins_status
 {
@@ -695,7 +720,6 @@ void InterlockCopyAzimuth(pattitude_t dest, pattitude_t source);
 /*------------------------------------------------------------------------------
  *  RegisterMarkTimeNotify() - Sends MARTIMEx (x[1-4]) command and reports to the callback
  *------------------------------------------------------------------------------*/
-
 typedef struct 	_st_marktime_rep	// REPORT STRUCT, NOT A NOVATEL RECORD
 {
 	uint16_t	Mark;				// indicator of Marktime 1, 2, 3, etc
@@ -710,16 +734,13 @@ typedef void(*pnotify_marktime)(marktime_rep_t mark);
 
 // MARKCONTROL MARK1 ENABLE NEGATIVE 0 25 // for events up to 40Hz
 void RegisterMarkTimeNotify(uint16_t mark_nr, bool polarity, pnotify_marktime callback );
-
 void CancelMarkTimeNotify(uint16_t mark_nr);
-
 int FormatMarkTimeRecord(char*buffer, size_t cnt, pmarktime_rep_t prec);
 
 
 /*------------------------------------------------------------------------------
  *  RegisterMarkPoseNotify() - Sends MARKPOSx (x[2-4]) command and reports to the callback
  *------------------------------------------------------------------------------*/
-
 typedef struct _st_markpos_rep
 {
 	uint16_t	Mark;			// indicator of Marktime 1, 2, 3, etc
@@ -738,6 +759,29 @@ void RegisterMarkPosNotify(uint16_t mark_nr, bool polarity, pnotify_markpos call
 void CancelMarkPosNotify(uint16_t mark_nr);
 int  FormatMarkPosRecord(char*buffer, size_t cnt, pmarkpos_rep_t prec);
 
+/*----------------------------------------------------------------------------------
+ *  RegisterVelocityNotify() - Sends Filtered Velocity reports to the callback
+ *----------------------------------------------------------------------------------*/
+typedef struct _st_velocity_rep
+{
+	uint16_t	Week;
+	double 		WeekSeconds;
+	double		HorSpeed;
+	double 		HorAccel;
+	double 		VertSpeed;
+	double		VertAccel;
+	double		Azimuth;
+
+} velocity_rep_t, * pvelocity_rep_t;
+
+typedef void(*pnotify_velocity)(pvelocity_rep_t vel);
+
+void RegisterVelocityReport(double freq, double cutoff, double alpha, double beta, pnotify_velocity callback );
+void CancelVelocityReport();
+	
+/*------------------------------------------------------------------------------
+ *  Logging Messages
+ *------------------------------------------------------------------------------*/
 void SendStartLoggingMessages();
 //bool SendStoptLoggingMessages();
 

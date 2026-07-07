@@ -624,13 +624,13 @@ static dictionary_t TimeStatusDictionary[] =
 	{ TIME_STATUS_FINESTEERING, "FINESTEERING" },
 	{ TIME_STATUS_SATTIME, "SATTIME" },
 	{ TIME_STATUS_FINEBACKUPSTEERING ,"FINEBACKUPSTEERING" },
-	{ TIME_STATUS_FINE ,  "FINE" },
-	{ TIME_STATUS_FINEADJUSTING , "FINEADJUSTING"  },
-	{ TIME_STATUS_FREEWHEELING ,   "FREEWHEELING"},
-	{TIME_STATUS_COARSESTEERING  , "COARSESTEERING" },
-	{ TIME_STATUS_COARSE , "COARSE" },
-	{ TIME_STATUS_COARSEADJUSTING , "COARSEADJUSTING" },
-	{TIME_STATUS_APPROXIMATE  , "APPROXIMATE" },
+	{ TIME_STATUS_FINE,  "FINE" },
+	{ TIME_STATUS_FINEADJUSTING, "FINEADJUSTING"  },
+	{ TIME_STATUS_FREEWHEELING,   "FREEWHEELING"},
+	{ TIME_STATUS_COARSESTEERING, "COARSESTEERING" },
+	{ TIME_STATUS_COARSE, "COARSE" },
+	{ TIME_STATUS_COARSEADJUSTING, "COARSEADJUSTING" },
+	{ TIME_STATUS_APPROXIMATE, "APPROXIMATE" },
 };
 
 //ARRAY_SIZE(TimeStatusDictionary)
@@ -737,7 +737,6 @@ void ClearNovatelStatus()
 /********************************************************************************************
  * PrintCoordinates() - for Position reports
 *********************************************************************************************/
-
 size_t PrintGeoCoordinates(char* buffer, size_t cnt, pposition_t pos )
 {
 	// grab a copy of the last known position
@@ -758,7 +757,6 @@ size_t PrintGeoCoordinates(char* buffer, size_t cnt, pposition_t pos )
 /*=========================================================================
  * MARKTIME event reports
  *=========================================================================*/
-
 pnotify_marktime _pmarktime_cb[4] =
 {
 	NULL,NULL,NULL,NULL
@@ -768,7 +766,6 @@ uint16_t marktime_counts[4] =
 {
 	0,0,0,0
 };
-
 
 void RegisterMarkTimeNotify(uint16_t mark_nr, bool polarity, pnotify_marktime callback )
 {
@@ -795,8 +792,6 @@ void RegisterMarkTimeNotify(uint16_t mark_nr, bool polarity, pnotify_marktime ca
 	}
 }
 
-
-
 void CancelMarkTimeNotify(uint16_t mark_nr)
 {
 	char buf[100];
@@ -805,7 +800,6 @@ void CancelMarkTimeNotify(uint16_t mark_nr)
 	SendOEM7700CommandWithRetry(buf, 3);
 	_pmarktime_cb[mark_nr-1] = NULL;
 }
-
 
 void NotifyMarkTime(MARKTIME_t *T, int mark_ndx)
 {
@@ -944,7 +938,6 @@ void RegisterNovatelTimeNotify(pnotify_time fn)
 	_notify_time = fn;
 }
 
-
 void UpdateGPTimeSync(void* vp)
 {
 	if (((TIMESYNCB_t*)vp)->time_status == TIME_STATUS_FINESTEERING )
@@ -1013,6 +1006,87 @@ void UpdateInsAttitude(void* vp)
 
 }
 
+
+/*----------------------------------------------------------------------------------
+ *  RegisterVelocityNotify() - Sends Filtered Velocity reports to the callback
+ * 
+ *  freq = frequency in Hertz
+ *  cutoff = cutoff velocity for the filter
+ *  alpha = filter coefficient alpha
+ *  beta = filter coefficient beta
+ *----------------------------------------------------------------------------------*/
+ pnotify_velocity _notify_velocity = NULL;
+
+ double _alpha = 0.0;		// speed filter coefficient
+ double _beta = 0.0;		// acceleration filter coefficient
+ double cutoff_velocity = 0.0;
+
+ velocity_rep_t LastVelocity = {0};
+
+ void NotifyVelocity(void* vp)
+{
+	double hspeed = 0.0, hacc = 0.0;
+	double vspeed = 0.0, vacc = 0.0;
+
+	LastVelocity.Week = ((BESTVEL_t*)vp)->H.gpsweek;
+	double ws = (double)(((BESTVEL_t*)vp)->H.gpsmsec)/1000.0F;  // ms from the header convert to seconds;
+	double dt = ws - LastVelocity.WeekSeconds;
+	LastVelocity.WeekSeconds = ws;
+
+	double nhs = ((BESTVEL_t*)vp)->HorSpeed;	// new horizontal speed
+
+	if (nhs > cutoff_velocity)
+	{
+		double ht = (LastVelocity.HorSpeed + LastVelocity.HorAccel * dt);
+		hspeed = ht + _alpha * (nhs - ht);
+		hacc = LastVelocity.HorAccel + ( _beta/dt) * (nhs - ht);
+	}
+	LastVelocity.HorSpeed = hspeed;
+	LastVelocity.HorAccel = hacc;
+
+	double nvs = ((BESTVEL_t*)vp)->VertSpeed;	// new vertical speed
+
+	if (nvs > cutoff_velocity)
+	{
+		double vt = (LastVelocity.VertSpeed + LastVelocity.VertAccel * dt);
+		vspeed = vt + _alpha * (nvs - vt);
+		vacc = LastVelocity.VertAccel + ( _beta/dt) * (nvs - vt);
+	}
+	LastVelocity.VertSpeed = vspeed;
+	LastVelocity.VertAccel = vacc;
+
+	_notify_velocity(&LastVelocity);
+
+}
+
+void RegisterVelocityReport(double freq,double cutoff, double alpha, double beta, pnotify_velocity callback )
+{
+	char buf[100];
+
+	if (callback == NULL || freq <= 0.0 || alpha <= 0.0 || beta <= 0.0 )
+		return;
+
+	_alpha = alpha;
+	_beta = beta;
+	cutoff_velocity = cutoff;
+
+	snprintf(buf, 100, "LOG COM2 BESTVELB ONTIME %.3lf", 1.0/freq);
+
+	if ( SendOEM7700CommandWithRetry(buf, 3) == 0 )
+		_notify_velocity = callback;
+
+}
+
+void CancelVelocityReport()
+{
+	char buf[100];
+
+	snprintf(buf, 100, "UNLOG COM2 BESTVELB");
+
+	SendOEM7700CommandWithRetry(buf, 3);
+	_notify_velocity = NULL;
+}	
+
 /********************************************************************************************
  * Read_Novatel_Message() - Reads and stores Novatel Records received by the Uart
  * 						 May contain IMU records if the receiver is SPAN enabled.
@@ -1052,6 +1126,7 @@ uint16_t idList[] =
 	RAWIMUSX_ID,
 	TIMESYNC_ID,
 	BESTPOS_ID,
+	BESTVEL_ID,
 	INSPVAX_ID,			// Updates INS status
 	VERSION_ID,
 	INSCONFIG_ID,
@@ -1065,12 +1140,12 @@ msg_process process_fn[] =
 	SendRawIMUSX,
 	UpdateGPTimeSync,
 	UpdateBestPosition,
+	NotifyVelocity,
 	UpdateInsAttitude,
 	StoreOnceMessage,
 	StoreOnceMessage,
 	StoreOnceMessage,
 };
-
 
 void ProcessMessages(uint16_t msgid, int cnt )
 {
