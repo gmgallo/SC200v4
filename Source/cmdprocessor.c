@@ -413,6 +413,11 @@ float ToFloat(char* token, float* pvalue)
 {
 	 return sscanf(token, "%f", pvalue);
 }
+double ToDouble(char* token, double* pdvalue)
+{
+	 return sscanf(token, "%lf", pdvalue);
+}
+
 
 /****************************************************************************
 * Command decoder
@@ -2249,27 +2254,31 @@ char* release_timer_cmd(char** tokens, int cnt, _ports_t port)
 void BenchmarkMalloc(size_t bufsize, int count);
 void BenchmarkRingBuffer(int bufsize, int count);
 char* BenchmarkFlexRingBuffer(char**tokens,int cnt,_ports_t port);
+char* BenchmarkTimeToDistance(char**tokens,int cnt,_ports_t port);
+char* BenchmarkStopWatch(char**tokens,int cnt,_ports_t port);
 
 char *benchmark_cmd(char**tokens,int cnt,_ports_t port)
 {
-	if (cnt < 4)
+	if (cnt < 2)
 		return PrintCmdError(
 				"BENCHMARK p1 p2 p3 pn\n"
 				" p1 = 1 - BenchmarkMalloc()\n"
 				" p1 = 2 - BenchmarkRingBuffer()\n"
 				" p1 = 3 - BenchmarkFlexRingBuffer()\n"
+				" p1 = 4 - BenchmarkTimeToDistance()\n"
+				" p1 = 5 - BenchmarkStopWatch()\n"
 				" p2, pn - benchmark parameters\n"
 				);
 
-	int32_t p1, p2, p3;
+	int32_t p1=0, p2=0, p3=0;
 
 	if ( ToInt32(tokens[1], &p1) == 0 )
 		return PrintCmdError( "bad parameter 1.");
 
-	if ( ToInt32(tokens[2], &p2) == 0 )
+	if ( cnt > 3 && ToInt32(tokens[2], &p2) == 0 )
 		return PrintCmdError( "bad parameter 2.");
 
-	if ( ToInt32(tokens[3], &p3) == 0 )
+	if ( cnt > 4 && ToInt32(tokens[3], &p3) == 0 )
 		return PrintCmdError( "bad parameter 3.");
 
 	switch(p1)
@@ -2288,11 +2297,84 @@ char *benchmark_cmd(char**tokens,int cnt,_ports_t port)
 		printf("BenchmarkFlexRingBuffer %ld %ld\n", p2, p3);
 		return BenchmarkFlexRingBuffer(tokens, cnt, port);
 		break;
+
+		case 4:
+		printf("BenchmarkTimeToDistance %ld \n", p2);
+		return BenchmarkTimeToDistance(tokens, cnt, port);
+		break;
+		case 5:
+		printf("BenchmarkStopWatch %ld seconds\n", p2);
+		return BenchmarkStopWatch(tokens, cnt, port);
+		break;
 	}
 
 	return PrintCmdOK();
 }
 
+char* BenchmarkTimeToDistance(char**tokens,int cnt, _ports_t port)
+{
+	char buf[100];
+
+	if (cnt < 3)
+		return PrintCmdError("Usage:BENCHMARK 4 <loops>\n");
+
+	double time_s, time_e, speed_mps, accel, dist, difs = 0.0;
+	int32_t count;
+
+	if ( ToInt32(tokens[2], &count) == 0 )
+		return PrintCmdError( "bad parameter 2.");
+
+	if (count < 1)
+		return PrintCmdError( "bad parameter 2. Must be > 0.");
+
+	InitStopWatch(true);
+	
+	for (int i = 0; i < count; i++)
+	{
+		// create a random speed  bweeen 1 and 50 m/s and a random acceleration between 0.1 and 1.0 m/s^2
+		speed_mps = 1 + (rand() % 50);
+		accel = 0 + (rand() % 10) / 10.0;
+		time_s = 1 + (rand() % 120);	// travel time between 10 and 120 seconds
+		// calculate distance traveled in time_s
+		dist = (speed_mps + (0.5 * accel * time_s)) * time_s;
+		time_e = TimeToDistance(speed_mps, accel, dist);
+
+		difs += time_e - time_s;
+	}
+
+	double elapsed = 1000 * GetStopWatchTime();
+	StopStopWatch();
+
+	snprintf(CmdAnswer, sizeof(CmdAnswer), "TimeToDistance() %ld loops in %.3lf ms, avg diff %.3lf s\n", count, elapsed, (difs / count));
+	return CmdAnswer;
+}
+
+char* BenchmarkStopWatch(char**tokens,int cnt, _ports_t port)
+{
+	char buf[100];
+
+	if (cnt < 3)
+		return PrintCmdError("Usage: BENCHMARK 5 <milliseconds>\n");
+
+	int32_t milliseconds;
+
+	if ( ToInt32(tokens[2], &milliseconds) == 0 )
+		return PrintCmdError( "bad parameter 2.");
+
+	if (milliseconds < 1)
+		return PrintCmdError( "bad parameter 2. Must be > 0.");
+
+	if (!InitStopWatch(true))
+		return PrintCmdError( "Failed to initialize stopwatch.");
+
+	cyhal_system_delay_ms(milliseconds);	// wait for 1 second to stabilize the timer
+
+	double total_elapsed = GetStopWatchTime();
+	StopStopWatch();
+
+	snprintf(CmdAnswer, sizeof(CmdAnswer), "BenchmarkStopWatch completed %ld milliseconds in %.6lf seconds\n", milliseconds, total_elapsed);
+	return CmdAnswer;
+}
 
 /*------------------------------------------------------------------------------------ TESTS */
 char* test_imu_loopback(char**tokens, int cnt, _ports_t port );

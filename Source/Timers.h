@@ -188,7 +188,12 @@ uint32_t GetGPTImerPeriod(GPT_HANDLE thandle);
 uint32_t GpTimerEllapsedMs(GPT_HANDLE thandle);
 bool IsGPTimerRunning(GPT_HANDLE thandle);
 void GPTimerDelay(uint16_t timeout_ms);
-
 int TimersFree();
+
+bool InitStopWatch(bool start);
+void StartStopWatch();
+void StopStopWatch();
+double GetStopWatchTime();
+void ResetStopWatch(bool start);
 
 #endif /* TIMERS_H_ */

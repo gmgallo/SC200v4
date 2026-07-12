@@ -910,5 +910,106 @@ void GPTimerDelay(uint16_t timeout_ms)
 		while ( IsGPTimerRunning( thandle) );
 	}
 }
+/*----------------------------------------------------------------------------------
+ * StopWatch - A simple stopwatch timer using 32 bit TCPWM[0].1 
+ *
+ *  InitStopWatch() - Initializes the stopwatch timer
+ *  StartStopWatch() - Starts the stopwatch timer
+ *  StopStopWatch() - Stops the stopwatch timer
+ *  GetStopWatchTime() - Returns the elapsed time in 1/10th of a microsecond resolution
+ *  ResetStopWatch() - Resets the stopwatch timer to zero
+ *
+ * Future: Add functionality to have multiple stopwatches running at the same time with different handles.
+ *----------------------------------------------------------------------------------*/
+double StopWatchSeconds = 0;
+float IsStopWatchRunning = false;
+
+void ResetStopWatch(bool start)
+{
+	StopStopWatch();
+	Cy_TCPWM_Counter_SetCounter(StopWatch_HW, StopWatch_NUM, 0);
+	StopWatchSeconds = 0;
+	if (start)
+		StartStopWatch();
+}
+
+void StartStopWatch()
+{
+	Cy_TCPWM_Counter_Enable(StopWatch_HW, StopWatch_NUM);
+
+	uint32_t status = Cy_TCPWM_Counter_GetStatus(StopWatch_HW, StopWatch_NUM);
+	Cy_TCPWM_TriggerStart_Single(StopWatch_HW, StopWatch_NUM);
+	do
+	{
+		status = Cy_TCPWM_Counter_GetStatus(StopWatch_HW, StopWatch_NUM);
+	} while (!(CY_TCPWM_COUNTER_STATUS_COUNTER_RUNNING & status));
+}
+
+void StopStopWatch()
+{
+	Cy_TCPWM_TriggerStopOrKill_Single(StopWatch_HW, StopWatch_NUM);
+
+	uint32_t status = Cy_TCPWM_Counter_GetStatus(StopWatch_HW, StopWatch_NUM);
+	do
+	{
+		status = Cy_TCPWM_Counter_GetStatus(StopWatch_HW, StopWatch_NUM);
+	} while (CY_TCPWM_COUNTER_STATUS_COUNTER_RUNNING & status);
+	
+	Cy_TCPWM_Counter_Disable(StopWatch_HW, StopWatch_NUM);
+}
+
+double GetStopWatchTime()
+{
+	Cy_TCPWM_TriggerCaptureOrSwap_Single(StopWatch_HW, StopWatch_NUM);
+
+	Cy_SysLib_DelayUs(1); // wait for the capture to complete
+	
+	/* The counter returns the elapsed time in 1/10th of a microsecond */
+	double T2 = (double) Cy_TCPWM_Counter_GetCapture0Val(StopWatch_HW, StopWatch_NUM);
+	
+	return StopWatchSeconds + T2 / 10000000.0;
+}
+
+void StopWatch_Isr()
+{
+	/* Get all the enabled pending interrupts */
+	uint32_t interrupts = Cy_TCPWM_GetInterruptStatusMasked(StopWatch_HW, StopWatch_NUM);
+
+	if (0UL != (CY_TCPWM_INT_ON_TC & interrupts))
+	{
+		/* Handle the terminal count event */
+		StopWatchSeconds += 1.0; // 1 second elapsed
+	}
+
+	Cy_TCPWM_ClearInterrupt(StopWatch_HW, StopWatch_NUM, interrupts);
+}
+
+
+bool InitStopWatch(bool start)
+{
+	if (!IsStopWatchRunning)
+	{
+		if (CY_TCPWM_SUCCESS !=  Cy_TCPWM_Counter_Init(StopWatch_HW, StopWatch_NUM, &StopWatch_config) )
+		{
+			return false;
+		}
+		ConfigureInterrupt(StopWatch_IRQ, USec_Timer_INTR_PRIORITY, StopWatch_Isr);
+
+		IsStopWatchRunning = true;
+	}
+	else
+	{
+		StopStopWatch();
+	}
+
+	Cy_TCPWM_Counter_SetCounter(StopWatch_HW, StopWatch_NUM, 0);
+	StopWatchSeconds = 0;
+
+	if (start)
+		StartStopWatch();
+
+	return true;
+}
+
 
 /* EOF */
