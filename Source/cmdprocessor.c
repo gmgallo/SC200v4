@@ -7,6 +7,7 @@
  *      Author: Guillermo
  */
 #include "common.h"
+#include "tests.h"
 
 /*--------------------------------------------------------------- PORTS*/
 typedef struct
@@ -48,7 +49,6 @@ const char* GetPortName(_ports_t port)
 
 	return "INVALID PORT ID";
 }
-
 
 /*---------------------------------------------------------------- SendToPort */
 void SendToPort(_ports_t port, uint8_t* buffer, size_t count)
@@ -161,11 +161,11 @@ char *sysconfig_cmd(char**, int, _ports_t);
 char *port_id_cmd(char**,int,_ports_t);
 char *help_id_cmd(char**,int,_ports_t);
 char *copy_console_cmd(char**,int, _ports_t);
-char *benchmark_cmd(char**,int,_ports_t);
 
 char *standby_cmd(char**,int,_ports_t);
 char *gnss_log_cmd(char**, int, _ports_t);
 char *pos_report_cmd(char**, int, _ports_t);
+char *vel_report_cmd(char**, int, _ports_t);
 char *delta_dist_report_cmd(char** tokens, int cnt, _ports_t port);
 char *marktime_report_cmd(char**, int, _ports_t);
 char *markpos_report_cmd(char** tokens, int cnt, _ports_t port);
@@ -176,11 +176,9 @@ char *set_pin_cmd(char** tokens, int cnt, _ports_t port);
 char *pulse_pin_cmd(char** tokens, int cnt, _ports_t port);
 char *read_pin_cmd(char** tokens, int cnt, _ports_t port);
 char *monitor_pin_cmd(char** tokens, int cnt, _ports_t port);
-char* cancel_pin_monitor_cmd(char** tokens, int cnt, _ports_t port);
-char* genoutput_cmd(char** tokens, int cnt, _ports_t port);
+char *cancel_pin_monitor_cmd(char** tokens, int cnt, _ports_t port);
 char *echo2_cmd(char**, int, _ports_t);
 
-char *test_cmd(char**,int,_ports_t);
 char *imu_log_cmd(char**,int,_ports_t);
 
 char *verbose_cmd(char**,int,_ports_t);
@@ -217,9 +215,10 @@ const fn_dictionary_t CmdDictionary[] =
 		{"STANDBY",		standby_cmd},
 		{"PORTID",			port_id_cmd},
 		{"?",				help_id_cmd},
-		{"COPYCONSOLE",	copy_console_cmd},
+		//{"COPYCONSOLE",		copy_console_cmd},
 		{"POSREPORT", 		pos_report_cmd},		// Send periodic position reports
-		{"DELTADISTREPORT", delta_dist_report_cmd},	// Send periodic delta distance reports
+		{"VELOCITYREPORT", vel_report_cmd},		// Send periodic velocity and acceleration reports
+		{"DELTADISTREPORT", delta_dist_report_cmd},// Send periodic delta distance reports
 		{"MARKTIMEREPORT", marktime_report_cmd},	// Send  reports
 		{"MARKPOSREPORT",  markpos_report_cmd},	// Send  reports
 		{"MAPLBREPORT",    map_ladybug_report_cmd},// Send Ladybug GPS logs to PORT#
@@ -233,21 +232,21 @@ const fn_dictionary_t CmdDictionary[] =
 		{"CANCELPINMONITOR",cancel_pin_monitor_cmd},
 
 		/* debug commands */
-		{"VERBOSE",  	verbose_cmd},			// Echo all commands and answer to the console.
+		{"VERBOSE",  	 verbose_cmd},			// Echo all commands and answer to the console.
 		{"GENOUTPUT",   genoutput_cmd },		// generates a n output of n bytes with crc16
 		{"ECHO2",       echo2_cmd	},			// Echoes back what's received by the port
 		{"GNSSLOGS",    gnss_log_cmd}, 		// enables (default) / disables GNSS logs 
-		{"IMULOGS", 	imu_log_cmd},			// enables (default) / disables IMU logs
-		{"BENCHMARK",	benchmark_cmd},  		// executes several benchmarks
-		{"TEST",		test_cmd },				// executes several test commands
+		{"IMULOGS", 	 imu_log_cmd},			// enables (default) / disables IMU logs
+		{"BENCHMARK",	 benchmark_cmd},  		// executes several benchmarks
+		{"TEST",		 test_cmd },				// executes several test commands
 		{"CREATETIMER", create_timer_cmd},
 		{"RELEASETIMER", release_timer_cmd},
-		{"IMUREDIR",     imuredir_cmd},
+		{"IMUREDIR",    imuredir_cmd},
 		{"IMUBAUDS",    imubauds_cmd},
 		{"STIMSTATUS",  stim_status},
 		{"IMURECSIZE",  imu_record_size_cmd},
 		{"IMUCONSOLE",  imu_console_cmd},
-		{"IMUERRORS",  imu_errors_cmd},
+		{"IMUERRORS",   imu_errors_cmd},
 		{"CLOCKMONITOR", clock_monitor_cmd},
 };
 
@@ -270,7 +269,6 @@ const char* SearchDictionary(dictionary_t *pd, size_t count, const int key, cons
 	return _deft;
 }
 
-
 fn_command_t find_Comand(char* token)
 {
 	for(int i = 0; i < ARRAY_SIZE(CmdDictionary); i++)
@@ -283,20 +281,7 @@ fn_command_t find_Comand(char* token)
 	return NULL;
 }
 
-
-/*---------------------------------------------- Actions */
-typedef enum
-{
-	ACTION_NONE	= 0,
-	ACTION_START = 1,
-	ACTION_STOP = 2,
-	ACTION_ENABLE = 3,
-	ACTION_DISABLE = 4,
-	ACTION_ON = 5,
-	ACTION_OFF = 6,
-
-}action_t;
-
+/*--------------------------------------------------- Actions */
 typedef struct
 {
 	const char* name;
@@ -327,17 +312,7 @@ action_t find_Action(const char *action_name)
 	return ACTION_NONE;
 }
 
-
 /*---------------------------------------------------- ON / OFF - YES / NO **/
-
-enum
-{
-	IS_OFF = 0,
-	IS_ON  = 1,
-	IS_NEITHER = -1,
-	NOT_FOUND = -2,
-};
-
 typedef struct
 {
 	char *key;
@@ -359,8 +334,6 @@ const bin_keyval_t binaryParams[] =
 		{"NEGATIVE", IS_OFF },
 		{"POSITIVE", IS_ON },
 	};
-
-
 
 int find_binaryParam(char* token)
 {
@@ -397,47 +370,11 @@ const char* find_KeywordName ( const tkeywrd_t* list, size_t size, const int key
 }
 
 
-
-/*---------------------------------------------------------------- Value Converters */
-int ToInt32(char* token, int32_t *pvalue)
-{
-	 return sscanf(token, "%ld", pvalue);
-}
-
-int ToUint32(char* token, uint32_t *pvalue)
-{
-	 return sscanf(token, "%lu", pvalue);
-}
-
-float ToFloat(char* token, float* pvalue)
-{
-	 return sscanf(token, "%f", pvalue);
-}
-double ToDouble(char* token, double* pdvalue)
-{
-	 return sscanf(token, "%lf", pdvalue);
-}
-
-
 /****************************************************************************
 * Command decoder
 *****************************************************************************/
-#define SIZEOF_CMD_BUFFER 400
 char CmdAnswer[SIZEOF_CMD_BUFFER];
-/*
-void str_to_upper(char* string)
-{
-    const char OFFSET = 'a' - 'A';
 
-    while ( *string )
-    {
-       if (*string >= 'a' && *string <= 'z')
-    	   *string -= OFFSET;
-
-        string++;
-    }
-}
-*/
 #define MAX_CMD_TOKENS	10
 
 bool VerboseCommands = false;
@@ -455,9 +392,6 @@ char* verbose_cmd(char** tokens, int cnt, _ports_t sender)
 }
 
 /*---------------------------------------------------------------- Console Ggrab */
-typedef char* (*grab_fn)(uint8_t*, _ports_t);
-typedef void (*_gab_disconnect)();
-
 grab_fn _grab_input = NULL;
 _gab_disconnect _release_grab = NULL;
 
@@ -525,7 +459,7 @@ volatile bool Cmd_Echo_On = true;		// command echo ON by default
 volatile bool clearEventCntr = false;
 
 char CmdBuffer[SIZEOF_CMD_BUFFER];
-int cmdIndex = 0;
+volatile int cmdIndex = 0;
 
 typedef char* (*fn_cmd_process)(uint8_t*,int,_ports_t);
 
@@ -625,7 +559,7 @@ char* PrintCmdOK()
 	return CmdAnswer;
 }
 
-char* PrintCmdError( char *string )
+char* PrintCmdError( const char *string )
 {
 	snprintf( CmdAnswer, ARRAY_SIZE(CmdAnswer),"[%s] Error: %s\n", GetUpTimeStr(), string);
 	return CmdAnswer;
@@ -1000,8 +934,6 @@ char *pos_report_cmd(char** tokens, int cnt, _ports_t port)
 				else if (_v > 0 )
 					period = _v;
 			}
-//			if ( strcmp(tokens[i], "UTM" ) == 0)
-//				format = UTM;
 		}
 	}
 
@@ -1057,25 +989,105 @@ void Cancel_Pos_Reports()
 	}
 }
 
-/*------------------------------------------------------------------------------------- DELTADISTREPORT */
-/* Sends delta distance travel reports 
+
+/*------------------------------------------------------------------------------------- VELOCITYREPORT */
+/* Sends velocity and acceleration reports 
  * 
- * 	DELTADISTREPORT  [port] [action] [period]
+ * 	VELOCITYREPORT  [port] [action] [period]
  *
  * 	Parameters:
  * 		port		- destination port. Default sender port
  * 		action		- START or STOP		Default START
- * 		period		- repetition period in meters (default 10 meters)
+ * 		period		- period in milliseconds (default 1000 ms)
  *----------------------------------------------------------------------------------------------------*/
+_ports_t velreport_target = INVALID_PORT;
+int32_t  velreport_period = 1000; // default 1 second
+#define MIN_VELOCITY_REPORT_PERIOD_MSEC 50
+char velreport_buf[256];
 
+void velocity_report_callback(pvelocity_rep_t vel)
+{
+	int cnt = snprintf(velreport_buf, ARRAY_SIZE(velreport_buf), 
+	"#VEL,%.6lf,%.3lf,%.3lf,%.3lf,%.3lf\n", 
+	vel->WeekSeconds, 
+	vel->HorSpeed, 
+	vel->HorAccel, 
+	vel->VertSpeed, 
+	vel->VertAccel);
+
+	SendToPort(velreport_target, (uint8_t*)velreport_buf, cnt);
+}
+
+char *vel_report_cmd(char** tokens, int cnt, _ports_t port)
+{
+	velreport_target = port;		// default to calling port;
+	 action_t action = ACTION_START;
+
+	if ( cnt > 1 ) /* if no arguments use defaults above */
+	{
+			/* scan arguments */
+		for (int i = 1; i < cnt; i++ )
+		{
+			_ports_t _p = FindPortID(tokens[i]);
+
+			if (_p != INVALID_PORT)
+			{
+				velreport_target = _p;
+				continue;
+			}
+
+			action_t _a = find_Action(tokens[i]);
+			if (_a != ACTION_NONE)
+			{
+				action = _a;
+				continue;
+			}
+
+			int32_t _v;
+
+			if ( ToInt32(tokens[i], &_v) != 0 )
+			{
+				if(_v >= MIN_VELOCITY_REPORT_PERIOD_MSEC)
+					velreport_period =  _v;
+				else
+					velreport_period = MIN_VELOCITY_REPORT_PERIOD_MSEC;
+			}
+		}
+	}
+
+	if (action == ACTION_STOP)
+	{
+			printf("{%s} Stopping %s to %s\n", GetPortName(port), tokens[0], GetPortName(velreport_target) );
+			CancelVelocityReport();
+	}
+	else
+	{
+		RegisterVelocityReport(velreport_period, 
+			SysConfig.speed_cutoff, 
+			SysConfig.vel_smoth_factor, 
+			SysConfig.accel_smoth_factor,
+			 velocity_report_callback );
+	}
+
+}
+
+/*------------------------------------------------------------------------------------- DELTADISTREPORT */
+/* Sends delta distance travel reports 
+ * 
+ * 	DELTADISTREPORT  [port] [action] [distance]
+ *
+ * 	Parameters:
+ * 		port		- destination port. Default sender port
+ * 		action		- START or STOP		Default START
+ * 		distance	- distance in meters (default 10 meters)
+ *----------------------------------------------------------------------------------------------------*/
+#define MIN_DELTA_DISTANCE_METERS 1
  _ports_t delta_dist_target = INVALID_PORT;
- int32_t  delta_dist = 10; // default 10 meters
+ int32_t  delta_dist = 10; 				// default 10 meters
+double report_frequency = 10.0;			// default 10 Hz
+double distance_travelled = 0.0;
 
 char distreport_buf[200];
-GPT_TASK_t distreport_task =
-{
-	.thandle = INVALID_GPTIMER_HANDLE
-};
 
 double DistanceTravelled(double speed, double accel, double period)
 {
@@ -1106,19 +1118,34 @@ double TimeToDistance(double speed, double accel, double distance)
 	return (t1 > 0) ? t1 : t2;
 }
 
-void velocity_report_callback(pvelocity_rep_t vel)
+
+void distance_report_callback(pvelocity_rep_t vel)
 {
-	int cnt = snprintf(distreport_buf, ARRAY_SIZE(distreport_buf), 
-	"#DELTADIST,%.6lf,%.3lf,%.3lf,%.3lf,%.3lf\n", 
-	vel->WeekSeconds, 
-	vel->HorSpeed, 
-	vel->HorAccel, 
-	vel->VertSpeed, 
-	vel->VertAccel);
+	double period = 1.0 / report_frequency; // period in seconds
+	// Update the distance travelled based on the current speed and acceleration
+	distance_travelled += DistanceTravelled(vel->HorSpeed, vel->HorAccel, period); // period in seconds
 
-	SendToPort(delta_dist_target, (uint8_t*)distreport_buf, cnt);
+	// Calculate the time required to reach the target distance
+	double timetodist =	0;
+	
+	if (distance_travelled < delta_dist)
+		timetodist = TimeToDistance(vel->HorSpeed, vel->HorAccel, delta_dist - distance_travelled);
+
+	if (timetodist < period)
+	{	
+		distance_travelled = 0; // Already reached the target distance
+
+		int cnt = snprintf(distreport_buf, ARRAY_SIZE(distreport_buf), 
+			"#DELTADIST,%.6lf,%.3lf,%.3lf,%.3lf\n", 
+			timetodist,			// time to reach target distance before next report
+			vel->WeekSeconds, 	// current week seconds
+			vel->HorSpeed, 		// current horizontal speed
+			vel->HorAccel 		// current horizontal acceleration
+			);
+
+		SendToPort(delta_dist_target, (uint8_t*)distreport_buf, cnt);
+	}
 }
-
 
 char *delta_dist_report_cmd(char** tokens, int cnt, _ports_t port)
 {
@@ -1145,14 +1172,14 @@ char *delta_dist_report_cmd(char** tokens, int cnt, _ports_t port)
 				continue;
 			}
 
-			int32_t _v;
+			int32_t _d;
 
-			if ( ToInt32(tokens[i], &_v) != 0 )
+			if ( ToInt32(tokens[i], &_d) != 0 )
 			{
-				if(_v < MIN_POSITION_REPORT_PERIOD_MSEC)
-					delta_dist =  MIN_POSITION_REPORT_PERIOD_MSEC;
-				else if (_v > 0 )
-					delta_dist = _v;
+				if(_d >= MIN_DELTA_DISTANCE_METERS)
+					delta_dist = _d;
+				else
+					delta_dist = MIN_DELTA_DISTANCE_METERS;
 			}
 		}
 	}
@@ -1164,11 +1191,11 @@ char *delta_dist_report_cmd(char** tokens, int cnt, _ports_t port)
 	}
 	else
 	{
-		RegisterVelocityReport(10, 
+		RegisterVelocityReport(report_frequency, 
 			SysConfig.speed_cutoff, 
 			SysConfig.vel_smoth_factor, 
 			SysConfig.accel_smoth_factor,
-			 velocity_report_callback );
+			 distance_report_callback );
 	}
 
 }
@@ -1915,8 +1942,6 @@ char *sysconfig_cmd(char** tokens, int cnt, _ports_t port)
 	return PrintCmdOK();
 }
 
-
-
 /*-----------------------------------------------------------------------------------------
  * GPIO PIN Set, clear, pulse, monitor
  *-----------------------------------------------------------------------------------------*/
@@ -2160,640 +2185,15 @@ char* cancel_pin_monitor_cmd(char** tokens, int cnt, _ports_t port)
 }
 
 
-/*----------------------------------------------------------------------------- TEST MULTIPLE TIMERS */
-
-GPT_HANDLE TimerHandles[MAX_TIMERS] =
-{
-		INVALID_GPTIMER_HANDLE, INVALID_GPTIMER_HANDLE, INVALID_GPTIMER_HANDLE, INVALID_GPTIMER_HANDLE, INVALID_GPTIMER_HANDLE,
-		INVALID_GPTIMER_HANDLE, INVALID_GPTIMER_HANDLE, INVALID_GPTIMER_HANDLE, INVALID_GPTIMER_HANDLE, INVALID_GPTIMER_HANDLE,
-};
-
-
-void TimerTest_Callback(void *arg)
-{
-	GPT_HANDLE handle = *((GPT_HANDLE*)arg);
-	uint32_t T = GetGPTImerPeriod(handle);
-	printf("TIMER %ld - Elapsed: %ld\n", handle, T);
-}
-
-char* create_timer_cmd(char** tokens, int cnt, _ports_t port)
-{
-	if (cnt == 1)
-	{
-		return "Usage: CREATETIMER duration_in_ms [TRUE for one shot]\n";
-	}
-
-	bool once = false;
-	int32_t T;
-
-
-	if ( ToInt32(tokens[1], &T) == 0 )
-	{
-		return "INVALID TIMER DURATION";
-	}
-
-	if (cnt == 3)
-	{
-		bool B =find_binaryParam(tokens[2]);
-		if(B == IS_ON)
-		{
-			once = B;
-		}
-	}
-
-	for(int i=0; i < ARRAY_SIZE(TimerHandles); i++)
-	{
-		if (TimerHandles[i] == INVALID_GPTIMER_HANDLE) // find first available timer
-		{
-			GPT_HANDLE h = CreateGPTimer(TimerTest_Callback, TimerHandles + i, T, once );
-			if (h != INVALID_GPTIMER_HANDLE)
-			{
-				TimerHandles[i] = h;
-				StartGPTimer(h);
-
-				snprintf(CmdAnswer, ARRAY_SIZE(CmdAnswer), "TIMER %ld CREATED\n", h);
-				return CmdAnswer;
-			}
-		}
-	}
-	return "NO MORE TIMERS AVAILABLE\n";
-}
-
-
-char* release_timer_cmd(char** tokens, int cnt, _ports_t port)
-{
-	if (cnt == 2)
-	{
-		int32_t T;
-
-		if ( ToInt32(tokens[1], &T) == 0 )
-		{
-			return "INVALID TIMER NUMBER";
-		}
-		for(int i=0; i < ARRAY_SIZE(TimerHandles); i++ )
-		{
-			if(T == TimerHandles[i])
-			{
-				StopGPTimer(T);
-				ReleaseGPTimer(T);
-				TimerHandles[i] = INVALID_GPTIMER_HANDLE;
-
-				snprintf(CmdAnswer, ARRAY_SIZE(CmdAnswer), "TIMER %ld RELEASED\n", T);
-				return CmdAnswer;
-			}
-		}
-		snprintf(CmdAnswer, ARRAY_SIZE(CmdAnswer), "TIMER %ld NOT FOUND\n", T);
-		return CmdAnswer;
-	}
-	return "Usage: RELEASETIMER timer_nr\n";
-}
-
-
-
-/*------------------------------------------------------------------------------------ BENCHMARKS */
-void BenchmarkMalloc(size_t bufsize, int count);
-void BenchmarkRingBuffer(int bufsize, int count);
-char* BenchmarkFlexRingBuffer(char**tokens,int cnt,_ports_t port);
-char* BenchmarkTimeToDistance(char**tokens,int cnt,_ports_t port);
-char* BenchmarkStopWatch(char**tokens,int cnt,_ports_t port);
-
-char *benchmark_cmd(char**tokens,int cnt,_ports_t port)
-{
-	if (cnt < 2)
-		return PrintCmdError(
-				"BENCHMARK p1 p2 p3 pn\n"
-				" p1 = 1 - BenchmarkMalloc()\n"
-				" p1 = 2 - BenchmarkRingBuffer()\n"
-				" p1 = 3 - BenchmarkFlexRingBuffer()\n"
-				" p1 = 4 - BenchmarkTimeToDistance()\n"
-				" p1 = 5 - BenchmarkStopWatch()\n"
-				" p2, pn - benchmark parameters\n"
-				);
-
-	int32_t p1=0, p2=0, p3=0;
-
-	if ( ToInt32(tokens[1], &p1) == 0 )
-		return PrintCmdError( "bad parameter 1.");
-
-	if ( cnt > 3 && ToInt32(tokens[2], &p2) == 0 )
-		return PrintCmdError( "bad parameter 2.");
-
-	if ( cnt > 4 && ToInt32(tokens[3], &p3) == 0 )
-		return PrintCmdError( "bad parameter 3.");
-
-	switch(p1)
-	{
-		case 1:
-		printf("Malloc benchmark %ld %ld\n", p2, p3);
-		BenchmarkMalloc(p2,p3);
-		break;
-
-		case 2:
-		printf("BenchmarkRingBuffer  %ld %ld\n", p2, p3);
-		BenchmarkRingBuffer(p2,p3);
-		break;
-
-		case 3:
-		printf("BenchmarkFlexRingBuffer %ld %ld\n", p2, p3);
-		return BenchmarkFlexRingBuffer(tokens, cnt, port);
-		break;
-
-		case 4:
-		printf("BenchmarkTimeToDistance %ld \n", p2);
-		return BenchmarkTimeToDistance(tokens, cnt, port);
-		break;
-		case 5:
-		printf("BenchmarkStopWatch %ld seconds\n", p2);
-		return BenchmarkStopWatch(tokens, cnt, port);
-		break;
-	}
-
-	return PrintCmdOK();
-}
-
-char* BenchmarkTimeToDistance(char**tokens,int cnt, _ports_t port)
-{
-	char buf[100];
-
-	if (cnt < 3)
-		return PrintCmdError("Usage:BENCHMARK 4 <loops>\n");
-
-	double time_s, time_e, speed_mps, accel, dist, difs = 0.0;
-	int32_t count;
-
-	if ( ToInt32(tokens[2], &count) == 0 )
-		return PrintCmdError( "bad parameter 2.");
-
-	if (count < 1)
-		return PrintCmdError( "bad parameter 2. Must be > 0.");
-
-	InitStopWatch(true);
-	
-	for (int i = 0; i < count; i++)
-	{
-		// create a random speed  bweeen 1 and 50 m/s and a random acceleration between 0.1 and 1.0 m/s^2
-		speed_mps = 1 + (rand() % 50);
-		accel = 0 + (rand() % 10) / 10.0;
-		time_s = 1 + (rand() % 120);	// travel time between 10 and 120 seconds
-		// calculate distance traveled in time_s
-		dist = (speed_mps + (0.5 * accel * time_s)) * time_s;
-		time_e = TimeToDistance(speed_mps, accel, dist);
-
-		difs += time_e - time_s;
-	}
-
-	double elapsed = 1000 * GetStopWatchTime();
-	StopStopWatch();
-
-	snprintf(CmdAnswer, sizeof(CmdAnswer), "TimeToDistance() %ld loops in %.3lf ms, avg diff %.3lf s\n", count, elapsed, (difs / count));
-	return CmdAnswer;
-}
-
-char* BenchmarkStopWatch(char**tokens,int cnt, _ports_t port)
-{
-	char buf[100];
-
-	if (cnt < 3)
-		return PrintCmdError("Usage: BENCHMARK 5 <milliseconds>\n");
-
-	int32_t milliseconds;
-
-	if ( ToInt32(tokens[2], &milliseconds) == 0 )
-		return PrintCmdError( "bad parameter 2.");
-
-	if (milliseconds < 1)
-		return PrintCmdError( "bad parameter 2. Must be > 0.");
-
-	if (!InitStopWatch(true))
-		return PrintCmdError( "Failed to initialize stopwatch.");
-
-	cyhal_system_delay_ms(milliseconds);	// wait for 1 second to stabilize the timer
-
-	double total_elapsed = GetStopWatchTime();
-	StopStopWatch();
-
-	snprintf(CmdAnswer, sizeof(CmdAnswer), "BenchmarkStopWatch completed %ld milliseconds in %.6lf seconds\n", milliseconds, total_elapsed);
-	return CmdAnswer;
-}
-
-/*------------------------------------------------------------------------------------ TESTS */
-char* test_imu_loopback(char**tokens, int cnt, _ports_t port );
-char* test_log_imu(char**tokens, int cnt, _ports_t port );
-char* test_forward_imu( char* port );
-char* test_bswap( _ports_t port );
-char* test_init_bit( _ports_t port );
-char* test_imu_pop( _ports_t port );
-char* Start_TDAS_Frequency(char**tokens, int cnt, _ports_t port );
-
-char *test_cmd(char**tokens, int cnt, _ports_t port)
-{
-	char *buf = CmdAnswer;
-	size_t size = ARRAY_SIZE(CmdAnswer);
-
-	if (cnt < 2)
-	{
-			snprintf(buf, size, "Test help:\n"
-					"\tTEST 1 [n] - IMU port loopback. n = record length, default 1\n"
-					"\tTEST 2 - STIM300 Log to port _port_name_.\n"
-					"\tTEST 3 - STIM300 FORWARD TO PORT.\n"
-					"\tTEST 4 - Dequeue IMU Records.\n"
-					"\tTEST 5 - Enable INIT_BIT PPS Output.\n"
-					"\tTEST 6 - Start NovAtel TDAS Frequency.\n"
-					);
-
-			return buf;
-	}
-
-	int32_t t1;
-
-	if ( ToInt32(tokens[1], &t1) == 0 )
-		return PrintCmdError( "bad parameter 1.");
-
-	switch(t1)
-	{
-		case 1:
-		{
-			buf = test_imu_loopback(tokens, cnt, port);
-			break;
-		}
-		case 2:
-		{
-			buf = test_log_imu(tokens, cnt, port);
-			break;
-		}
-
-		case 3:
-		{
-			if (cnt >= 3)
-				buf = test_forward_imu( tokens[2] );
-			else
-				return PrintCmdError("Forward STIM300 missing port param\n");
-			break;
-		}
-
-		case 4:
-			{
-				buf = test_imu_pop( port );
-				break;
-			}
-		case 5:
-		{
-			test_init_bit(port);
-			break;
-		}
-		case 6:
-		{
-			buf = Start_TDAS_Frequency(tokens, cnt, port);
-			break;
-		}
-
-		default:
-			snprintf(buf, size, "Incorrect test # [%ld]\n", t1);
-	}
-	return buf;
-}
-
-
-
-/*----------------------------------------------- Compose Novatel MARTK1 Frequency  
-* Output on TP2 -> IMU TDAS output                                      
-*/
-char* Start_TDAS_Frequency(char**tokens, int cnt, _ports_t port )
-{
-	char buf[100];
-
-	if ( cnt < 3)
-	{
-		snprintf(CmdAnswer, sizeof(CmdAnswer), "\nUsage: TEST 6 frequency[0-1000] pulse_width[ms] [polarity[0-1]]\n");
-		return CmdAnswer;
-	}
-
-	bool _polarity = true;
-	uint32_t _frequency = 0, _pulse_width = 0;
-
-	if ( cnt >= 3)
-	{
-		uint32_t freq;
-		if ( ToUint32(tokens[2], &freq) == 0 )
-		{
-			return PrintCmdError("Invalid frequency parameter\n");
-		}
-		_frequency = freq;
-
-		if (_frequency == 0)
-		{
-			Stop_IMU_Trigger_Frequency();
-			int j = ComposeMarkOutDisable( buf, 100,1);
-			 Uart_Oem7700_Send((uint8_t*)buf,j);
-
-			return "TDAS Frequency Stopped\n";
-		}
-	}
-
-
-	if( cnt >= 4)
-	{
-		uint32_t pw;
-
-		if ( ToUint32(tokens[3], &pw) == 0 || pw < 1 )
-		{
-			return PrintCmdError("Invalid pulse width parameter\n");
-		}
-		_pulse_width = pw;
-	}
-
-	if (cnt >= 5)
-	{
-		int pol = find_binaryParam(tokens[4]);
-
-		if (pol == IS_ON || pol == IS_OFF)
-		{
-			_polarity = (pol == IS_ON);
-		}
-		else
-		{
-			return PrintCmdError("Invalid polarity parameter\n");
-		}
-	}
-
-	/* prevent out of valid range settings */
-
-	if (_frequency > 1000  )
-		_frequency = 1000;
-	else if (_frequency < 1 )
-		_frequency = 1;
-
-	int j = ComposeMarkOutCommand(buf, ARRAY_SIZE(buf), 1, _frequency, _pulse_width, _polarity);
-	Uart_Oem7700_Send((uint8_t*)buf,j);
-	snprintf(CmdAnswer, sizeof(CmdAnswer), "START TDAS Frequency %ld Hz, pulse width %ld ms, polarity %s\n", _frequency, _pulse_width, _polarity? "HIGH":"LOW");
-	return CmdAnswer;	
-}
-
-/*----------------------------------------------- TEST - IMU PORT LOOPBACK */
-
-
-char *GrabConsoleInput(uint8_t* buf, _ports_t port)
-{
-	if (buf[0] == 'x' || buf[0] == 'X') // Test for grab end
-	{
-		_release_console();
-		return "Console disconnected.\n";
-	}
-	//int cnt = strlen((char*)buf);
-	
-	Uart_IMU_SendString((char_t*)buf); 	// Send line to IMU port
-
-	return NULL;
-}
-
-/*----------------------------------------*/
-fnMessageProcessor 	old_processor;
-uint32_t	old_isr_level;
-
-void DisconnectLoopback()
-{
-	Reconfig_Uart_IMU(old_isr_level, false );
-	SetImuMsgProcessor(old_processor);
-	Enable_Uart_IMU();
-}
-
-/*----------------------------------------*/
-uint8_t testBuf[128];
-#define MAX_TEST_BUF 127
-int tbIndex = 0;
-bauds_t imu_bauds = B115200;
-
-void TestMsgProcessor(uint8_t* buf, size_t cnt)
-{
-	memset(testBuf, 0, ARRAY_SIZE(testBuf) );
-	memcpy(testBuf, buf, MIN(cnt,MAX_TEST_BUF));
-	printf("IMU message: %d chars [%s]\n", cnt, testBuf );
-	tbIndex =0;
-}
-
-
-char* test_imu_loopback(char**tokens, int cnt, _ports_t port )
-{
-	uint32_t record_length = 1;
-
-	if (cnt > 2)
-	{
-		uint32_t n = 0;
-		
-		if (ToUint32(tokens[2], &n) != 1)
-		{
-			return PrintCmdError("Invalid record length parameter\n");
-		}
-		record_length = n;
-	}
-	snprintf(CmdAnswer,  ARRAY_SIZE(CmdAnswer), "IMU LOOPBACK TEST with Record length %ld\nBidge TX+ to RX+ and TX- to RX-\n"
-						"Send strings over this terminal, or 'X' to end\n", record_length);
-
-	Init_Uart_IMU( imu_bauds );
-	Set_IMU_COM_Target(Target_PSOC);
-	old_isr_level = Reconfig_Uart_IMU(record_length -1, false); // One interrupt per 2 characters
-
-	old_processor = SetImuMsgProcessor(TestMsgProcessor );
-	Enable_Uart_IMU();
-
-	_grab_console(GrabConsoleInput ,DisconnectLoopback);
-
-	return CmdAnswer;
-}
-
-/*------------------------------------------------------------------------------------- IMUREDIR */
-/* IMUREDIR - Redirects the raw IMU output to a port for diagnostics
- *
- * Command format:
- *
- * 	IMUREDIR [port]
- *
- *----------------------------------------------------*/
-_ports_t redir_target;
-
-void ImuRedirMsgProcessor(uint8_t* buf, size_t cnt)
-{
-	char str[100];
-
-	SendToPort( redir_target,buf, cnt);
-	GetUartErrorStr(str,100, Uart_IMU_Error);
-
-	if ( Uart_IMU_Error != 0)
-	{
-		printf("IMU message: %d bytes, UART Error: %s\n", cnt, str );
-		Uart_IMU_Error = 0;
-	}
-	tbIndex =0;
-}
-
-/*------------------------------------------------------------------------------------- IMUREDIR */
-
-char *imuredir_cmd(char**tokens, int cnt, _ports_t port)	// debug command
-{
-	redir_target = port;		// default to calling port;
-
-	if (cnt > 1)
-	{
-		_ports_t _p = FindPortID(tokens[1]);
-		if (_p != INVALID_PORT)
-		{
-			redir_target = _p;
-		}
-	}
-	snprintf(CmdAnswer,  ARRAY_SIZE(CmdAnswer), "IMU REDIR TO PORT\n"
-						"Send commands over this terminal, or 'X' to end\n");
-
-	Set_IMU_COM_Target(Target_PSOC);
-
-	if (SysConfig.imu_type == IMUType_FSAS )
-	{
-		old_isr_level = Reconfig_Uart_IMU(FSAS_SN_RECORD_SIZE-1, false);
-	}
-	else if (SysConfig.imu_type == IMUType_STIM300 )
-	{
-		old_isr_level = Reconfig_Uart_IMU(STIM_RECORD_SIZE-1, false);
-	}
-	else if(SysConfig.imu_type == IMUType_KVH )
-	{
-		old_isr_level = Reconfig_Uart_IMU(KVH_RECORD_SIZE-1, false);
-	}
-	old_processor = SetImuMsgProcessor(ImuRedirMsgProcessor );
-
-	_grab_console(GrabConsoleInput,DisconnectLoopback);
-
-	Enable_Uart_IMU();
-
-	return CmdAnswer;
-}
-
-/****************************************************************************
-* BAUDSMON PWM
-*
-* Generate accurate pulses on TP6 for the duration of # of bytes
-* Use to compare the actual baud rate received from the INU device
-*****************************************************************************/
-#define BAUDSMON_INTR_PRIORITY  CYHAL_ISR_PRIORITY_DEFAULT // = 3
-#define BAUDSMON_TP	TP6
-bool baudsmon_init = false;
-
-void _bauds_monitor_Isr(void)
-{
-	uint32_t interrupts = Cy_TCPWM_GetInterruptStatusMasked(BAUDSMON_HW, BAUDSMON_NUM);
-
-	/* Handle the compare event trigger */
-	if (0UL != (CY_TCPWM_INT_ON_CC & interrupts))
-	{
-		SET_DEBUG_TP(BAUDSMON_TP);
-	}
-	Cy_TCPWM_ClearInterrupt(BAUDSMON_HW, BAUDSMON_NUM, interrupts );
-}
-
-void InitBaudsMonitor()
-{
-	if (baudsmon_init)
-		return;
-
-    if (CY_TCPWM_SUCCESS != Cy_TCPWM_PWM_Init(BAUDSMON_HW, BAUDSMON_NUM, &BAUDSMON_config))
-    {
-        /* Handle possible errors */
-    }
-    /* Enable the initialized PWM */
-    Cy_TCPWM_PWM_Enable(BAUDSMON_HW, BAUDSMON_NUM);
-
-	ConfigureInterrupt(BAUDSMON_IRQ, BAUDSMON_INTR_PRIORITY, _bauds_monitor_Isr );
-
-	baudsmon_init = true;
-}
-
-void TriggerBaudsMonitor(uint32_t compare)
-{
-	Cy_TCPWM_PWM_SetCompare0Val(BAUDSMON_HW, BAUDSMON_NUM, compare);
-	CLEAR_DEBUG_TP(BAUDSMON_TP);
-	Cy_TCPWM_TriggerReloadOrIndex(BAUDSMON_HW, (1UL << BAUDSMON_NUM));
-}
-
-/*------------------------------------------------------------------------------------- CLOCKMONITOR */
-cy_stc_tcpwm_pwm_config_t _clk_monitor_config;
-
-#define CLK_MONITOR_CLOCK PCLK_TCPWM1_CLOCKS21 // Peripheral clock for the TCPWM[1] counter[21]
-
-bool Init_ClockMonitor(uint32_t clk_hw, uint32_t clk_num, bool continuous)
-{
-	memcpy(&_clk_monitor_config, &CLK_MONITOR_config, sizeof(cy_stc_tcpwm_pwm_config_t) );
-	uint32_t pwmode = continuous? CY_TCPWM_PWM_CONTINUOUS : CY_TCPWM_PWM_ONESHOT;
-
-	_clk_monitor_config.pwmMode = pwmode;
-
-		 // Re-initialize with new mode
-	if(	 CY_TCPWM_SUCCESS == Cy_TCPWM_PWM_Init(CLK_MONITOR_HW, CLK_MONITOR_NUM, &_clk_monitor_config))
-	{
-		Cy_GPIO_Pin_FastInit(TP6_PORT, TP6_PORT_NUM, CY_GPIO_DM_STRONG,	0, TP6_HSIOM);   // HSIOM selection for PWM line
-	    Cy_SysClk_PeriphAssignDivider(CLK_MONITOR_CLOCK, clk_hw, clk_num);
-		Cy_TCPWM_PWM_Enable(CLK_MONITOR_HW,CLK_MONITOR_NUM);
-		return true;
-	}
-
-	return false;
-	
-}
-
-void DeInit_ClockMonitor()
-{
-	Cy_TCPWM_PWM_Disable(CLK_MONITOR_HW, CLK_MONITOR_NUM);
-	Cy_TCPWM_PWM_DeInit(CLK_MONITOR_HW, CLK_MONITOR_NUM, &_clk_monitor_config);
-	
-	Cy_GPIO_Pin_FastInit(TP6_PORT, TP6_PORT_NUM, CY_GPIO_DM_STRONG, 0, HSIOM_SEL_GPIO);  // HSIOM selection back t GPIO
-	
-}
-
-
-void Start_ClockMonitor()
-{
-	if (Init_ClockMonitor(CLK6_100MHZ_HW, CLK6_100MHZ_NUM, true) )
-	{
-		/* if not one shot start timer at once */
-		Cy_TCPWM_TriggerReloadOrIndex_Single(CLK_MONITOR_HW, CLK_MONITOR_NUM);
-		/* Handle possible errors */
-	}
-}
-
-void Stop_ClockMonitor()
-{
-	DeInit_ClockMonitor();
-}
-
-
-char* clock_monitor_cmd(char** tokens, int cnt, _ports_t port)
-{
-	if (cnt == 1)
-	{
-		return "Usage: CLOCKMONITOR [ON|OFF]\n"
-				"      Outputs a square wave frequency == PERICLCK/100 (1 MHz) on TP6\n";
-	}
-	action_t action = find_Action(tokens[1]);
-
-	if (action == ACTION_ON)
-	{
-		Start_ClockMonitor();
-		return "CLOCKMONITOR ON: 1MHz at TP6\n";
-	}
-	else if (action == ACTION_OFF)
-	{
-		Stop_ClockMonitor();
-		return "CLOCKMONITOR OFF\n";
-	}
-
-	return "Invalid arguments. Usage: CLOCKMONITOR [ON|OFF]\n";
-}
-
 /*----------------------------------------------------------------------- IMUBAUDS */
-
 typedef struct
 {
 	bauds_t clk;
 	char* name;
 
 }_t_baud_name;
+
+bauds_t imu_bauds = B115200;
 
 _t_baud_name baud_names[] =
 {
@@ -2952,109 +2352,6 @@ char *imu_errors_cmd(char** tokens, int cnt, _ports_t port)
 	return CmdAnswer;
 }
 
-
-/*====================================================================== STIM300 TEST */
-
-char *stim_status(char** tokens, int cnt, _ports_t port)
-{
-	GetStimStatus(CmdAnswer,  ARRAY_SIZE(CmdAnswer));
-	return CmdAnswer;
-}
-
-char *GrabInput2(uint8_t* buf, _ports_t port)
-{
-	if (buf[0] == 'x' || buf[0] == 'X')
-	{
-		_release_console();
-		Init_IMU_Interface(SysConfig.imu_type, SysConfig.imu_connect);
-
-		return "End of Test.\n";
-	}
-	return "";
-}
-
-char* test_log_imu(char**tokens, int cnt, _ports_t port )
-{
-	Init_IMU_Interface(IMUType_STIM300, Target_PSOC);
-	_grab_console(GrabInput2, Stim_Stop_Logging);
-
-	if(cnt < 3)
-		return "Missing port ID to forward.\n";
-
-	return test_forward_imu( tokens[2] );
-
-}
-
-
-char* test_forward_imu( char* port )
-{
-	char *buf = CmdAnswer;
-	size_t size = ARRAY_SIZE(CmdAnswer);
-
-	_grab_console(GrabInput2, Stim_Stop_Logging);
-
-	_ports_t log_port = FindPortID(port);
-
-	if (log_port == INVALID_PORT )
-	{
-		snprintf(buf, size, "STIM300 FORWARD: %s Not a valid port (COM1,USB1,USB2,CONSOLE,UART_J6)\n",port );
-		return buf;
-	}
-
-	Stim_Log_To_Port(log_port);
-
-	snprintf(buf, size, "STIM300 LOG to PORT %s STARTED - X to end.\n", port );
-
-	return (buf);
-}
-
-/*------------------------------------------------------------------------
- * Find error in IMU records pop during LOG command
- */
-
-extern RDBUF_HANDLE HandleImuRecords;
-
-char* test_imu_pop( _ports_t port )
-{
-	printf("Reading back Queued IMU records.\n");
-
-	if (HandleImuRecords == NULL)
-	{
-		return "ERROR: HandleImuRecords == NULL\n";
-	}
-
-	int records = FlexRingBufferItems( HandleImuRecords );
-	uint16_t cnt = 0;
-
-	printf("HandleImuRecords Record count: %d\n", records);
-
-	uint8_t  *pdn=0;
-
-	while ( records != 0 )
-	{
-		SET_DEBUG_TP(TP6);
-		cnt++;
-
-		printf("Reading record %d of %d ...\n", cnt, records);
-
-		ring_data_t R;
-		PopFromFlexRingBuffer(HandleImuRecords, &R);
-
-		uint16_t size = R.Size;
-		uint8_t  *pd = R.Data;
-		pdn = pd + size;
-
-		CLEAR_DEBUG_TP(TP6);
-
-		char * roll = (pd != pdn)? "OK" : "Roll";
-
-		printf("\tRecord size: %d. %hhn Next: %hhn - %s\n", size, pd, pdn, roll);
-
-		records = FlexRingBufferItems( HandleImuRecords );
-	}
-	return "---< DONE >----\n";
-}
-
 /*-------------------------------------------------------------
  *  Test IMU Init Bit line
  */
@@ -3081,88 +2378,6 @@ char* test_init_bit( _ports_t port )
 	return (buf);
 }
 
-/*====================================================================== BYTESWAP TEST */
-
-char *GrabInput3(uint8_t* buf, _ports_t port)
-{
-	char *ans = CmdAnswer;
-	size_t size = ARRAY_SIZE(CmdAnswer);
-
-
-	if (buf[0] == 'x' || buf[0] == 'X')
-	{
-		_release_console();
-		SysConfig.imu_connect = Target_NovAtel;
-
-		return "End of Test.\n";
-	}
-
-	uint32_t val, c3;
-
-	sscanf((char*)buf,"%lu", &val);
-	c3 = _bswap32(val);
-
-	snprintf(ans, size, "Received  \t %.8lX\n__bswap32()\t = %.8lX\n",val,c3);
-
-	return ans;
-}
-
-char* test_bswap( _ports_t port )
-{
-	char *buf = CmdAnswer;
-	size_t size = ARRAY_SIZE(CmdAnswer);
-
-	snprintf(buf, size,"Byte swap test. Enter a 32 bit number - X or x to end\n");
-
-	_grab_console(GrabInput3, NULL);
-
-	return buf;
-}
-
-/*----------------------------------------------------------------------------- GENOUTPUT */
-/* GenerateS a random string with a CRC at the end "RANDOMCHARS[CRC]\n"
- */
-char* genoutput_cmd(char** tokens, int cnt, _ports_t port)
-{
-	_ports_t target = port;
-	int32_t nch = 25;
-
-	if(cnt < 2)
-		return "Usage: GENOUTPUT nchars [port]\n";
-
-	/* scan arguments */
-	for (int i = 1; i < cnt; i++ )
-	{
-		_ports_t _p = FindPortID(tokens[i]);
-
-		if (_p != INVALID_PORT)
-		{
-			target = _p;
-			continue;
-		}
-		else
-		{
-			if ( ToInt32(tokens[i], &nch) == 0 )
-				return  "bad parameter.\n";
-		}
-	}
-
-	/* generate a buffer random chars and CRC */
-	uint8_t* pbuf = malloc(nch+1);
-
-	for (int i = 0; i < nch; i++)
-	{
-		pbuf[i] = '@' + rand() % 26;
-	}
-	pbuf[nch] = '\n';
-
-	uint16_t crc = crc16_ccitt(pbuf,nch);
-	SendToPort(target, pbuf,nch);
-	int n = snprintf(CmdBuffer,sizeof(CmdBuffer),"[%u]\n", crc );
-	SendToPort(target, (uint8_t*)CmdBuffer,(size_t)n);
-
-	return  PrintCmdOK();
-}
 
 /*============================================================================== ECHO2 */
 

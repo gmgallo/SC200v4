@@ -30,12 +30,14 @@
 * Version 3.23 - Sep. 2025 Added clock correction for IMU timing based on PPS
 *			   - Corrected IMU time gap at 1 seccond of logging.
 * Version 4.00 - Mar. 2026 - Added support for KVH IMU.
+* Version 4.1  - Jul. 2026 - Added Delta Distance and filtered velocity report commands
+*                          - Added StopWatch command to measure time between two events using TCPWM[0].1
 ********************************************************************************/
 #include "common.h"
 
 /* __TIMESTAMP__ is a gcc defined, fix length string of the type: Thu Jun 02 19:13: 2022 */
 
-const char VersionString[] = "G2-SC200 - Firmware Version 4.0 - " __TIMESTAMP__;
+const char VersionString[] = "G2-SC200 - Firmware Version 4.1 - " __TIMESTAMP__;
 
 const char _consoleHeader[] ="\r\n"
 		"*******************************************************************************\r\n"
@@ -47,7 +49,7 @@ const char _consoleHeader[] ="\r\n"
 		"*       %s            *\r\n" /* This line to be filled by  IDString */
 		"*******************************************************************************\r\n\n";
 
-sys_config_t SysConfig;
+sys_config_t SysConfig;	// global configuration structure, loaded from eprom at startup
 
 /********************************************************************************************
 *                                                                                           *

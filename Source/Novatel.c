@@ -1023,7 +1023,7 @@ void UpdateInsAttitude(void* vp)
 
  velocity_rep_t LastVelocity = {0};
 
- void NotifyVelocity(void* vp)
+void NotifyVelocity(void* vp)
 {
 	double hspeed = 0.0, hacc = 0.0;
 	double vspeed = 0.0, vacc = 0.0;
