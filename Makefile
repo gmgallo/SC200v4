@@ -46,8 +46,8 @@ TARGET=BSP_SC200
 #
 # If APPNAME is edited, ensure to update or regenerate launch
 # configurations for your IDE.
-APPNAME=mtb-example-empty-app
-
+#OLD APPNAME=mtb-example-empty-app
+APPNAME=SC200V4
 # Name of toolchain to use. Options include:
 #
 # GCC_ARM -- GCC provided with ModusToolbox software

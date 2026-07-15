@@ -227,7 +227,7 @@ bool Init_IMU_Interface(imu_type_t Type, imu_target_t Target)
 	if (Type == IMUType_FSAS )
 	{
 		Stop_IMU_Trigger_Frequency();						// In case we have a warm restart
-		SetImuDataFormat(fmtNOVATEL_RAW);					// IMU data format reporting
+		SetImuDataFormat(fmtNOVATEL_RAW,false);					// IMU data format reporting
 		SetImuMsgProcessor(Decode_FSAS_IMU_Data);			// Switch to IMU data decoding
 		Init_IMU_NOGO_Detect();								// GO/NOGO signal monitoring
 		Init_Uart_IMU( B115200 );
@@ -308,6 +308,11 @@ const char* GetImuTypeName( imu_type_t type)
 const char* GetImuConnectName(imu_target_t target)
 {
 	return find_KeywordName(ImuComTargets, ImuComTargetsCount, target);
+}
+
+const char* GetImuFormatName(imu_format_t format)
+{
+	return find_KeywordName(ImuFormatsDictionary, ImuFormatsCount, format);
 }
 
 /****************************************************************************
@@ -513,7 +518,7 @@ void Format_FSAS_SN_Native(PFSAS_SN_t);
 
 fnImuFormatter _FormatImuRecord = Format_FSAS_SN_to_NovatelRawSX;
 
-void SetImuDataFormat(imu_format_t format)
+void SetImuDataFormat(imu_format_t format, bool save)
 {
 	switch(format)
 	{
@@ -547,6 +552,16 @@ void SetImuDataFormat(imu_format_t format)
 			PrintWithTime("KVH IMU format selected.\n");
 			break;
 		}
+		default:
+			PrintWithTime("IMU data format not implemented.\n");
+			return;
+	}
+
+	SysConfig.imu_format = format;
+
+	if (save)
+	{
+		SaveConfig(&SysConfig);
 	}
 
 	ClearImuErrors();

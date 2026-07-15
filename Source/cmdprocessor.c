@@ -443,8 +443,6 @@ char* ProcessCommand(char* buffer, _ports_t sender)
 			return fcommand(tokens,i, sender);
 
 		snprintf(CmdAnswer,SIZEOF_CMD_BUFFER,"{%s} <ERROR> - Unknown command: %s\n", GetPortName(sender), tokens[0]);
-		printf(CmdAnswer);
-
 		return CmdAnswer;
 	}
 	return "UNKNOWN COMMAND"; /* Something went wrong */
@@ -993,22 +991,22 @@ void Cancel_Pos_Reports()
 /*------------------------------------------------------------------------------------- VELOCITYREPORT */
 /* Sends velocity and acceleration reports 
  * 
- * 	VELOCITYREPORT  [port] [action] [period]
+ * 	VELOCITYREPORT  [port] [action] [frequency]
  *
  * 	Parameters:
  * 		port		- destination port. Default sender port
  * 		action		- START or STOP		Default START
- * 		period		- period in milliseconds (default 1000 ms)
+ * 		frequency	- frequency in Hertz (default 1 Hz) max 20 Hz
  *----------------------------------------------------------------------------------------------------*/
 _ports_t velreport_target = INVALID_PORT;
-int32_t  velreport_period = 1000; // default 1 second
-#define MIN_VELOCITY_REPORT_PERIOD_MSEC 50
+double  velreport_frequency = 1.0; // default 1 Hz
+#define MAX_VELOCITY_REPORT_FREQUENCY_HZ 20
 char velreport_buf[256];
 
 void velocity_report_callback(pvelocity_rep_t vel)
 {
 	int cnt = snprintf(velreport_buf, ARRAY_SIZE(velreport_buf), 
-	"#VEL,%.6lf,%.3lf,%.3lf,%.3lf,%.3lf\n", 
+	"#VEL,%.3lf,%.3lf,%.3lf,%.3lf,%.3lf\n", 
 	vel->WeekSeconds, 
 	vel->HorSpeed, 
 	vel->HorAccel, 
@@ -1047,10 +1045,10 @@ char *vel_report_cmd(char** tokens, int cnt, _ports_t port)
 
 			if ( ToInt32(tokens[i], &_v) != 0 )
 			{
-				if(_v >= MIN_VELOCITY_REPORT_PERIOD_MSEC)
-					velreport_period =  _v;
+				if(_v > MAX_VELOCITY_REPORT_FREQUENCY_HZ)
+					velreport_frequency = MAX_VELOCITY_REPORT_FREQUENCY_HZ;
 				else
-					velreport_period = MIN_VELOCITY_REPORT_PERIOD_MSEC;
+					velreport_frequency =  _v;
 			}
 		}
 	}
@@ -1062,13 +1060,14 @@ char *vel_report_cmd(char** tokens, int cnt, _ports_t port)
 	}
 	else
 	{
-		RegisterVelocityReport(velreport_period, 
+		RegisterVelocityReport(velreport_frequency, 
 			SysConfig.speed_cutoff, 
 			SysConfig.vel_smoth_factor, 
 			SysConfig.accel_smoth_factor,
 			 velocity_report_callback );
 	}
 
+	return PrintCmdOK();
 }
 
 /*------------------------------------------------------------------------------------- DELTADISTREPORT */
@@ -1136,7 +1135,7 @@ void distance_report_callback(pvelocity_rep_t vel)
 		distance_travelled = 0; // Already reached the target distance
 
 		int cnt = snprintf(distreport_buf, ARRAY_SIZE(distreport_buf), 
-			"#DELTADIST,%.6lf,%.3lf,%.3lf,%.3lf\n", 
+			"#DELTADIST,%.3lf,%.3lf,%.3lf,%.3lf\n", 
 			timetodist,			// time to reach target distance before next report
 			vel->WeekSeconds, 	// current week seconds
 			vel->HorSpeed, 		// current horizontal speed
@@ -1198,6 +1197,7 @@ char *delta_dist_report_cmd(char** tokens, int cnt, _ports_t port)
 			 distance_report_callback );
 	}
 
+return PrintCmdOK();
 }
 
 
@@ -1471,14 +1471,14 @@ char *imufreq_cmd(char**tokens, int cnt, _ports_t port)
  * 	Argument:
  * 		format 		FSAS, IMR, STIM, KVH or NRAW (=NovAtel raw startup default)
  *
- * 	Format is not saved to config. Always defaults to RAW on startup.
- *
- */
+ * 	Format is saved to config for debug purposes. 
+ *  For NON SPAN configurations the format must be converted to NovAtel Raw NRAW  
+ *-------------------------------------------------------------------------------------------------*/
 char *imuformat_cmd(char**tokens, int cnt, _ports_t port)
 {
 	if (cnt < 2)
 	{
-		return PrintCmdError( "Missing FORMAT argument." );
+		return PrintCmdError( "Usage: IMUFORMAT <format> [SAVE]" );
 	}
 	int format = find_KeywordConstant( ImuFormatsDictionary, ImuFormatsCount, tokens[1]);
 
@@ -1488,8 +1488,19 @@ char *imuformat_cmd(char**tokens, int cnt, _ports_t port)
 	}
 	else
 	{
-		SetImuDataFormat((imu_format_t)format);
-		snprintf(CmdAnswer, ARRAY_SIZE(CmdAnswer),"[%s] IMU data format changed to %s\n", GetUpTimeStr(), tokens[1] );
+		bool save = false;
+		char* saved = "NOT saved.";
+		if (cnt == 3)
+		{
+			if (strcmp(tokens[2],"SAVE") == 0)
+			{
+				save = true;
+				saved = "SAVED.";
+			}
+		}
+		SetImuDataFormat((imu_format_t)format, save);
+
+		snprintf(CmdAnswer, ARRAY_SIZE(CmdAnswer),"[%s] IMU data format changed to %s - %s\n", GetUpTimeStr(), tokens[1], saved	);
 	}
 	return CmdAnswer;
 }
@@ -2221,13 +2232,13 @@ char *imubauds_cmd(char** tokens, int cnt, _ports_t port)	// debug command
 
 	if (ndx == 0 && cnt == 5)
 	{
-		uint32_t div;
-		uint32_t frac;
+		int32_t div;
+		int32_t frac;
 		
-		ToUint32(tokens[2], &div);
-		ToUint32(tokens[3], &frac);
-		uint32_t oversample;
-		ToUint32(tokens[4], &oversample);
+		ToInt32(tokens[2], &div);
+		ToInt32(tokens[3], &frac);
+		int32_t oversample;
+		ToInt32(tokens[4], &oversample);
 
 		if ( _cycfg_Uart_IMU_clock(div, frac, oversample) == false )
 		{
@@ -2261,7 +2272,7 @@ char *imubauds_cmd(char** tokens, int cnt, _ports_t port)	// debug command
 		 if (freq != 0)
 		 {
 			 double duration = (1000.0 * compare)/(double)freq;
-			 snprintf(CmdAnswer,  ARRAY_SIZE(CmdAnswer), "BAUDSMON (%ld clocks @ %ld KHz) will generate a %.2lf ms pulse of %ld bytes on TP6\n",
+			 snprintf(CmdAnswer,  ARRAY_SIZE(CmdAnswer), "BAUDSMON (%lu clocks @ %lu KHz) will generate a %.2lf ms pulse of %lu bytes on TP6\n",
 			 					 compare, freq/1000, duration, bytes );
 
 			 TriggerBaudsMonitor(compare);

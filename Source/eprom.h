@@ -8,6 +8,7 @@
 #ifndef EPROM_H_
 #define EPROM_H_
 #include "cy_em_eeprom.h"
+#include "globaldefs.h"
 
 /*
  * PSoC 6 MCU: CY8C62x6,CY8C62x7 Datasheet
@@ -115,6 +116,7 @@ typedef struct
 	int8_t soft_reset;			// App reset reset requested
 	int8_t no_com2_logs_init;	// Do not init COM2 (NOVATEL) logs (will be set externally)
 	int8_t imu_type;			// ID of IMU selected
+	imu_format_t imu_format;	// IMU data format selected
 	int8_t imu_connect;			// IMU COM directed to OEM7700 or PSOC6 (default)
 	int8_t enable_ins;			// for receivers with SPAN firmware
 	double imu_accel_scale;		// 0 = IMU default

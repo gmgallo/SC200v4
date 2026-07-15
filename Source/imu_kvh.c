@@ -105,6 +105,8 @@ bool Init_KVH_IMU()
 {
     Stop_IMU_Trigger_Frequency();						// In case we have a warm restart
 
+    KVH_ImuFormat = SysConfig.imu_format;
+    
     if (SysConfig.imu_accel_scale != DEFAULT_IMU_SCALE )
     {
         kvh_accel_scale = SysConfig.imu_accel_scale;

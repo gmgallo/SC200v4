@@ -49,6 +49,8 @@ const char _consoleHeader[] ="\r\n"
 		"*       %s            *\r\n" /* This line to be filled by  IDString */
 		"*******************************************************************************\r\n\n";
 
+/* DEFAULT IMU TYPE, FORMAT and TARGET are defined in imu.h and stored in SysConfig  */
+
 sys_config_t SysConfig;	// global configuration structure, loaded from eprom at startup
 
 /********************************************************************************************

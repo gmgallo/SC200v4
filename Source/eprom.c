@@ -130,6 +130,7 @@ bool LoadConfigDefaults(sys_config_t* pcfg)
 	pcfg->soft_reset = false;
 	pcfg->no_com2_logs_init = false;
 	pcfg->imu_type = DEFAULT_IMU_TYPE;
+	pcfg->imu_format = DEFAULT_IMU_FORMAT;
 	pcfg->imu_connect = DEFAULT_IMU_TARGET;
 	pcfg->imu_accel_scale = DEFAULT_IMU_SCALE;
 	pcfg->imu_gyro_scale = DEFAULT_IMU_SCALE;
@@ -148,17 +149,16 @@ int PrintSysConfig(char* buffer, size_t size)
 	ReadConfig( &config);
 	size_t cnt = 0;
 
-	cnt += snprintf(buffer, size,       "Soft reset              : %s\n", (config.soft_reset != 0? "Yes": "No"));
-	cnt += snprintf(buffer+cnt, size-cnt,"No COM2 Log Init       : %s\n",config.no_com2_logs_init != 0?  "True": "False");
-	cnt += snprintf(buffer+cnt, size-cnt,"IMU Type               : %s\n", GetImuTypeName(config.imu_type));
-	cnt += snprintf(buffer+cnt, size-cnt,"IMU Connected to       : %s\n", GetImuConnectName(config.imu_connect));
-	cnt += snprintf(buffer+cnt, size-cnt,"Enable INS (SPAN)      : %s\n",  (config.enable_ins != 0? "Yes": "No"));
-	cnt += snprintf(buffer+cnt, size-cnt,"IMU ACCEL Scale        : %.3lf\n",  config.imu_accel_scale);
-	cnt += snprintf(buffer+cnt, size-cnt,"IMU GYRO Scale         : %.3lf\n",  config.imu_gyro_scale);
-	cnt += snprintf(buffer+cnt, size-cnt,"Velocity Smooth Factor : %.3lf\n", config.vel_smoth_factor);
-	cnt += snprintf(buffer+cnt, size-cnt,"Accel Smooth Factor    : %.3lf\n", config.accel_smoth_factor);
+	cnt += snprintf(buffer, size,        "Soft reset             : %s\n",        (config.soft_reset != 0? "Yes": "No"));
+	cnt += snprintf(buffer+cnt, size-cnt,"No COM2 Log Init       : %s\n",        config.no_com2_logs_init != 0?  "True": "False");
+	cnt += snprintf(buffer+cnt, size-cnt,"IMU Type               : %s\n",        GetImuTypeName(config.imu_type));
+	cnt += snprintf(buffer+cnt, size-cnt,"IMU Data Format        : %s\n",        GetImuFormatName(config.imu_format));
+	cnt += snprintf(buffer+cnt, size-cnt,"IMU Connected to       : %s\n",        GetImuConnectName(config.imu_connect));
+	cnt += snprintf(buffer+cnt, size-cnt,"Enable INS (SPAN)      : %s\n",        (config.enable_ins != 0? "Yes": "No"));
+	cnt += snprintf(buffer+cnt, size-cnt,"IMU ACCEL Scale        : %.3lf\n",     config.imu_accel_scale);
+	cnt += snprintf(buffer+cnt, size-cnt,"IMU GYRO Scale         : %.3lf\n",     config.imu_gyro_scale);
+	cnt += snprintf(buffer+cnt, size-cnt,"Velocity Smooth Factor : %.3lf\n",     config.vel_smoth_factor);
+	cnt += snprintf(buffer+cnt, size-cnt,"Accel Smooth Factor    : %.3lf\n",     config.accel_smoth_factor);
 	cnt += snprintf(buffer+cnt, size-cnt,"Speed Cutoff           : %.3lf m/s\n", config.speed_cutoff);
-
 	return cnt;
 }
-

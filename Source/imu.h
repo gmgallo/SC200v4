@@ -7,6 +7,7 @@
  *      Author: Guillermo
  *
  * Rev.3.1: Oct. 2024
+ * Rev.3.2: Jun. 2025 - Added IMU data format to SysConfig and status report
  */
 
  #pragma once
@@ -15,6 +16,16 @@
 #include "imu_stim.h"
 
 #pragma pack(push,1)
+
+/****************************************************************************
+* IMU Defaults
+*****************************************************************************/
+
+#define DEFAULT_IMU_TYPE		IMUType_KVH		// can be changed and stored in NV EEPROM
+#define DEFAULT_IMU_FORMAT		fmtNOVATEL_RAW	// can be changed and stored in NV EEPROM
+#define DEFAULT_IMU_TARGET		Target_PSOC		// For receivers without SPAN firmware
+#define DEFAULT_IMU_SCALE		0.0				// For IMUs that may need accel / gyro scale correction to be saved in SysConfig.
+#define DEFAULT_IMU_FREQUENCY 	(200U)			// Standard 200Hz frequency for IMU trigger output and data reporting
 
 /****************************************************************************
 * IMU flags
@@ -34,10 +45,6 @@ extern const size_t    ImuComTargetsCount;
 extern const tkeywrd_t ImuFormatsDictionary[];
 extern const size_t   ImuFormatsCount;
 
-#define DEFAULT_IMU_TYPE	IMUType_KVH		// can be changed and stored in NV EEPROM
-#define DEFAULT_IMU_TARGET	Target_PSOC		// For receivers without SPAN firmware
-#define DEFAULT_IMU_SCALE	0.0				// For IMUs that may need accel / gyro scale correction to be saved in SysConfig.
-
 /****************************************************************************
 * Init_IMU_Interface()
 *****************************************************************************/
@@ -49,6 +56,7 @@ void PrintImuType();
 void PrintValidImuTypes();
 const char* GetImuTypeName( imu_type_t type);
 const char* GetImuConnectName(imu_target_t target);
+const char* GetImuFormatName(imu_format_t format);
 
 /****************************************************************************
 * Set_IMU_Type()
@@ -84,10 +92,8 @@ void Set_IMU_COM_Target(imu_target_t Target);		// Select where to connect the IM
 void Set_IMU_Trigger_Frequency(uint32_t _frequency);
 void Stop_IMU_Trigger_Frequency();
 
-
 #define MIN_IMU_FREQUENCY	  (100U)	// 100 Hertz min frequency without FSAS IMU errors
 #define MAX_IMU_FREQUENCY	  (1000U)	// 1000 Hertz (1 ms period for 921600 baud) max frequency without IMU errors
-#define DEFAULT_IMU_FREQUENCY (200U)	// Standard 200Hz frequency for IMU trigger output and data reporting
 
 /****************************************************************************
  * SetImuDataFormat()
@@ -96,14 +102,13 @@ void Stop_IMU_Trigger_Frequency();
  *  - sets the reporting structure pointer.
  *
  ****************************************************************************/
-void SetImuDataFormat(imu_format_t format);  // select FSAS native or NOVATEL RAW report data format
+void SetImuDataFormat(imu_format_t format, bool save);  // select IMU native or NOVATEL RAW report data format
 //void PurgeImuBuffer();
 
 /****************************************************************************
  * IMU Status and Error flags
  *
  ****************************************************************************/
-
 enum FSAS_HW_Error
 {
 	IMU_NO_HW_ERROR		= 0,

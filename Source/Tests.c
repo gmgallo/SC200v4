@@ -666,46 +666,179 @@ char *benchmark_cmd(char**tokens,int cnt,_ports_t port)
 	return PrintCmdOK();
 }
 
+/*---------------------------------------------------------------- BENCHMARK TIME TO DISTANCE */
 double TimeToDistance(double speed, double accel, double distance);
+double DistanceTravelled(double speed, double accel, double period);
+
+static double report_frequency = 10.0;			// default 10 Hz
+static double trigger_dist = 0;
+
+static _ports_t delta_dist_target = INVALID_PORT;
+
+
+static double distance_travelled = 0.0;
+static double last_update_time = 0.0;
+
+bool distance_report_process(pvelocity_rep_t vel)
+{
+	 char report_buf[256];
+
+	if (last_update_time == 0.0)
+	{
+		last_update_time = vel->WeekSeconds;
+		return false;
+	}
+
+	double period = vel->WeekSeconds - last_update_time; // period in seconds
+	last_update_time = vel->WeekSeconds;
+
+	if (period <= 0.0 || trigger_dist <= 0.0)
+	{
+		return false; // Invalid period, skip this report
+	}
+
+	// Update the distance travelled based on the current speed and acceleration
+	double travel = DistanceTravelled(vel->HorSpeed, vel->HorAccel, period); // period in seconds
+
+	distance_travelled += travel;
+
+	// Calculate the time required to reach the target distance
+	if (distance_travelled >= trigger_dist)
+	{
+		int cnt = snprintf(report_buf, ARRAY_SIZE(report_buf), 
+			"+DELTADIST,%6.3lf, %.3lf, %.3lf, %.3lf, %.3lf\n", 
+			vel->WeekSeconds, 	// current week seconds
+			distance_travelled,	// distance travelled since last report
+			0.0,				// residual time to reach target or oveshoot
+			vel->HorSpeed, 		// current horizontal speed
+			vel->HorAccel 		// current horizontal acceleration
+			);
+
+		distance_travelled -= trigger_dist; // Reset distance travelled after reaching the target
+
+		// Already reached the target distance
+		if (cnt > 0 && cnt < ARRAY_SIZE(report_buf))
+			SendToPort(delta_dist_target, (uint8_t*)report_buf, cnt);
+
+		return true; // Indicate that the target distance has been reached
+	}
+		
+	double timetodist = TimeToDistance(vel->HorSpeed, vel->HorAccel, trigger_dist - distance_travelled);
+	
+	if (timetodist < period/2.0)
+	{	
+		int cnt = snprintf(report_buf, ARRAY_SIZE(report_buf), 
+			"-DELTADIST,%6.3lf, %.3lf, %.3lf, %.3lf, %.3lf\n", 
+			vel->WeekSeconds, 	// current week seconds
+			distance_travelled,	// distance travelled since last report
+			timetodist,			// residual time to reach target or oveshoot
+			vel->HorSpeed, 		// current horizontal speed
+			vel->HorAccel 		// current horizontal acceleration
+			);
+
+		distance_travelled = 0; // Already reached the target distance
+
+		if (cnt > 0 && cnt < ARRAY_SIZE(report_buf))
+			SendToPort(delta_dist_target, (uint8_t*)report_buf, cnt);
+
+		return true; // Indicate that the target distance has been reached
+
+	}
+	return false; // Target distance not yet reached
+}
+
+static inline double frand(double min, double max)
+{
+    // uniform in [0,1]
+    double u = (double)rand() / (double)RAND_MAX;
+
+    // scale to [min, max]
+    return min + (max - min) * u;
+}
+
 
 char* BenchmarkTimeToDistance(char**tokens,int cnt, _ports_t port)
 {
 	char buf[100];
 
-	if (cnt < 3)
-		return PrintCmdError("Usage:BENCHMARK 4 <loops>\n");
+	delta_dist_target = port;
+	distance_travelled = 0.0;
+ 	last_update_time= 0.0;
 
-	double time_s, time_e, speed_mps, accel, dist, difs = 0.0;
+	velocity_rep_t vel = {
+		.WeekSeconds = 1000.0,
+		.HorSpeed = 0.0,
+		.HorAccel = 0.0,
+		.VertSpeed = 0.0,
+		.VertAccel = 0.0
+	};
+
+	if (cnt < 4)	
+		return PrintCmdError("Usage: BENCHMARK 4 <loops> <trigger_distance> <initial_speed>\n");
+
+	double speed=10, accel;
+	if (cnt >= 5)
+	{
+		if ( ToDouble(tokens[4], &speed) == 0 )
+			return PrintCmdError( "bad initial speed parameter 4.");
+		if (speed < 0.0)
+			speed = 0.0;
+	}
 	int32_t count;
 
 	if ( ToInt32(tokens[2], &count) == 0 )
-		return PrintCmdError( "bad parameter 2.");
+		return PrintCmdError( "bad loops parameter 2.");
 
 	if (count < 1)
-		return PrintCmdError( "bad parameter 2. Must be > 0.");
+		return PrintCmdError( "bad loops parameter 2. Must be > 1.");
+
+	if ( ToDouble(tokens[3], &trigger_dist) == 0 )
+		return PrintCmdError( "bad trigger distance parameter 3.");
+
+	if (trigger_dist < 1.0)
+		trigger_dist = 1.0;
+
+	if ( ToDouble(tokens[4], &speed) == 0 )
+		return PrintCmdError( "bad initial speed parameter 4.");
+
+	if (speed < 1.0)
+		speed = 1.0;
 
 	InitStopWatch(true);
+
+	//speed = frand(0.5, 10.0);	// random speed between 0.1 and 10.0 m/s
+	accel = frand(-1.0, 1.0);	// random acceleration between -1.0 and 1.0 m/s^2
+	
+	// calculate distance traveled in time_s
+	//dist = (speed + (0.5 * accel * time_s * time_s)) * time_s;
+
+
+	double period = 1.0 / report_frequency; // period in seconds
 	
 	for (int i = 0; i < count; i++)
 	{
-		// create a random speed  bweeen 1 and 50 m/s and a random acceleration between 0.1 and 1.0 m/s^2
-		speed_mps = 1 + (rand() % 50);
-		accel = 0 + (rand() % 10) / 10.0;
-		time_s = 1 + (rand() % 120);	// travel time between 10 and 120 seconds
-		// calculate distance traveled in time_s
-		dist = (speed_mps + (0.5 * accel * time_s)) * time_s;
-		time_e = TimeToDistance(speed_mps, accel, dist);
+		vel.WeekSeconds += period;
+		vel.HorSpeed = speed;
+		vel.HorAccel = accel;
 
-		difs += time_e - time_s;
+		distance_report_process(&vel);
+		
+		speed += (0.5 * accel * period); // Update speed based on acceleration and time)
+		if (speed < 0.0)
+			speed = 0.0; // Prevent negative speed
+
+		accel = frand(-2.0, 2.0);
 	}
 
 	double elapsed = 1000 * GetStopWatchTime();
 	StopStopWatch();
 
-	snprintf(CmdAnswer, SIZEOF_CMD_BUFFER, "TimeToDistance() %ld loops in %.3lf ms, avg diff %.3lf s\n", count, elapsed, (difs / count));
+	snprintf(CmdAnswer, SIZEOF_CMD_BUFFER, "TimeToDistance() %ld loops in %.3lf ms\n", count, elapsed);
 	return CmdAnswer;
 }
 
+
+/*---------------------------------------------------------------------------------------------- STOPWATCH BENCHMARK */
 char* BenchmarkStopWatch(char**tokens,int cnt, _ports_t port)
 {
 	char buf[100];
