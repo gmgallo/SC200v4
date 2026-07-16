@@ -1026,7 +1026,11 @@ void UpdateInsAttitude(void* vp)
 void NotifyVelocity(void* vp)
 {
 	if (_notify_velocity == NULL)
+	{
+		CancelVelocityReport();
 		return;
+	}
+
 
 	double hspeed = 0.0, hacc = 0.0;
 	double vspeed = 0.0, vacc = 0.0;
@@ -1062,12 +1066,12 @@ void NotifyVelocity(void* vp)
 
 }
 
-void RegisterVelocityReport(double freq, double cutoff, double alpha, double beta, pnotify_velocity callback )
+bool RegisterVelocityReport(double freq, double cutoff, double alpha, double beta, pnotify_velocity callback )
 {
 	char buf[100];
 
 	if (callback == NULL || alpha <= 0.0 || beta <= 0.0 )
-		return;
+		return false;
 
 	_alpha = alpha;
 	_beta = beta;
@@ -1080,11 +1084,16 @@ void RegisterVelocityReport(double freq, double cutoff, double alpha, double bet
 
 	float period = 1.0/freq;
 
+	snprintf(buf, 100, "BESTVELTYPE BESTPOS");
+	if ( SendOEM7700CommandWithRetry(buf, 3) != OEM7700_OK )
+		return false;
+	
 	snprintf(buf, 100, "LOG COM2 BESTVELB ONTIME %.2f", period);
+	if ( SendOEM7700CommandWithRetry(buf, 3) != OEM7700_OK )
+		return false;
 
-	if ( SendOEM7700CommandWithRetry(buf, 3) == OEM7700_OK )
-		_notify_velocity = callback;
-
+	_notify_velocity = callback;
+	return true;
 }
 
 void CancelVelocityReport()

@@ -998,9 +998,10 @@ void Cancel_Pos_Reports()
  * 		action		- START or STOP		Default START
  * 		frequency	- frequency in Hertz (default 1 Hz) max 20 Hz
  *----------------------------------------------------------------------------------------------------*/
+#define MAX_VELOCITY_REPORT_FREQUENCY_HZ 20
+
 _ports_t velreport_target = INVALID_PORT;
 double  velreport_frequency = 1.0; // default 1 Hz
-#define MAX_VELOCITY_REPORT_FREQUENCY_HZ 20
 char velreport_buf[256];
 
 void velocity_report_callback(pvelocity_rep_t vel)
@@ -1060,11 +1061,15 @@ char *vel_report_cmd(char** tokens, int cnt, _ports_t port)
 	}
 	else
 	{
-		RegisterVelocityReport(velreport_frequency, 
+		if (!RegisterVelocityReport(velreport_frequency, 
 			SysConfig.speed_cutoff, 
 			SysConfig.vel_smoth_factor, 
 			SysConfig.accel_smoth_factor,
-			 velocity_report_callback );
+			 velocity_report_callback ))
+		{
+			return PrintCmdError("Failed registering velocity report\n");
+		}
+
 	}
 
 	return PrintCmdOK();
@@ -1080,13 +1085,16 @@ char *vel_report_cmd(char** tokens, int cnt, _ports_t port)
  * 		action		- START or STOP		Default START
  * 		distance	- distance in meters (default 10 meters)
  *----------------------------------------------------------------------------------------------------*/
-#define MIN_DELTA_DISTANCE_METERS 1
- _ports_t delta_dist_target = INVALID_PORT;
- int32_t  delta_dist = 10; 				// default 10 meters
-double report_frequency = 10.0;			// default 10 Hz
-double distance_travelled = 0.0;
+#define MIN_DELTA_DISTANCE_METERS 4
+#define DEFAULT_DELTA_DISTANCE_METERS 10
+#define DEFAULT_VELOCITY_REPORT_FREQUENCY_HZ 10.0
 
-char distreport_buf[200];
+ _ports_t delta_dist_target = INVALID_PORT;
+ int32_t  delta_dist        = DEFAULT_DELTA_DISTANCE_METERS; // default 10 meters
+double report_frequency     = DEFAULT_VELOCITY_REPORT_FREQUENCY_HZ;			// default 10 Hz
+
+double distance_travelled = 0.0;
+double last_update_time = 0.0;
 
 double DistanceTravelled(double speed, double accel, double period)
 {
@@ -1120,69 +1128,111 @@ double TimeToDistance(double speed, double accel, double distance)
 
 void distance_report_callback(pvelocity_rep_t vel)
 {
-	double period = 1.0 / report_frequency; // period in seconds
+ 	char report_buf[256];
+
+	if (last_update_time == 0.0)
+	{
+		last_update_time = vel->WeekSeconds;
+		return;
+	}
+
+	double period = vel->WeekSeconds - last_update_time; // period in seconds
+
+	if (period <= 0.0 || delta_dist <= 0.0)
+	{
+		return; // Invalid period, skip this report
+	}
+
+	last_update_time = vel->WeekSeconds;
+
 	// Update the distance travelled based on the current speed and acceleration
-	distance_travelled += DistanceTravelled(vel->HorSpeed, vel->HorAccel, period); // period in seconds
+	double travel = DistanceTravelled(vel->HorSpeed, vel->HorAccel, period); // period in seconds
+
+	distance_travelled += travel;
 
 	// Calculate the time required to reach the target distance
-	double timetodist =	0;
-	
-	if (distance_travelled < delta_dist)
-		timetodist = TimeToDistance(vel->HorSpeed, vel->HorAccel, delta_dist - distance_travelled);
-
-	if (timetodist < period)
-	{	
-		distance_travelled = 0; // Already reached the target distance
-
-		int cnt = snprintf(distreport_buf, ARRAY_SIZE(distreport_buf), 
-			"#DELTADIST,%.3lf,%.3lf,%.3lf,%.3lf\n", 
-			timetodist,			// time to reach target distance before next report
+	if (distance_travelled >= delta_dist)
+	{
+		int cnt = snprintf(report_buf, ARRAY_SIZE(report_buf), 
+			"#DELTADIST,%6.3lf, %.3lf, %.3lf, %.3lf, %.3lf\n", 
 			vel->WeekSeconds, 	// current week seconds
+			distance_travelled,	// distance travelled since last report
+			0.0,				// residual time to reach target or 0 for oveshoot
 			vel->HorSpeed, 		// current horizontal speed
 			vel->HorAccel 		// current horizontal acceleration
 			);
 
-		SendToPort(delta_dist_target, (uint8_t*)distreport_buf, cnt);
+		distance_travelled -= delta_dist; // Reset distance travelled after reaching the target
+
+		// Already reached the target distance
+		if (cnt > 0 && cnt < ARRAY_SIZE(report_buf))
+			SendToPort(delta_dist_target, (uint8_t*)report_buf, cnt);
 	}
+		
+	double timetodist = TimeToDistance(vel->HorSpeed, vel->HorAccel, delta_dist - distance_travelled);
+	
+	if (timetodist < period/2.0)
+	{	
+		int cnt = snprintf(report_buf, ARRAY_SIZE(report_buf), 
+			"#DELTADIST,%6.3lf, %.3lf, %.3lf, %.3lf, %.3lf\n", 
+			vel->WeekSeconds, 	// current week seconds
+			distance_travelled,	// distance travelled since last report
+			timetodist,			// residual time to reach target or oveshoot
+			vel->HorSpeed, 		// current horizontal speed
+			vel->HorAccel 		// current horizontal acceleration
+			);
+
+		distance_travelled = 0; // Already reached the target distance
+
+		if (cnt > 0 && cnt < ARRAY_SIZE(report_buf))
+			SendToPort(delta_dist_target, (uint8_t*)report_buf, cnt);
+	}
+// Target distance not yet reached
 }
 
 char *delta_dist_report_cmd(char** tokens, int cnt, _ports_t port)
 {
-	 delta_dist_target = port;		// default to calling port;
-	 action_t action = ACTION_START;
+	delta_dist_target = port;		// default to calling port;
+ 	distance_travelled = 0.0;
+ 	last_update_time= 0.0;
+	delta_dist = DEFAULT_DELTA_DISTANCE_METERS; // default 10 meters 
 
-	if ( cnt > 1 ) /* if no arguments use defaults above */
+	action_t action = ACTION_START;
+
+	if ( cnt < 2 ) /* if no arguments use defaults above */
 	{
+		return PrintCmdError("Usage: DELTADISTREPORT <trigger_distance> [port] <START|STOP>\n");
+	}
 			/* scan arguments */
-		for (int i = 1; i < cnt; i++ )
+	for (int i = 1; i < cnt; i++ )
+	{
+		_ports_t _p = FindPortID(tokens[i]);
+
+		if (_p != INVALID_PORT)
 		{
-			_ports_t _p = FindPortID(tokens[i]);
+			delta_dist_target = _p;
+			continue;
+		}
 
-			if (_p != INVALID_PORT)
-			{
-				delta_dist_target = _p;
-				continue;
-			}
+		// Check for valid action keywords (START, STOP)
+		action_t _a = find_Action(tokens[i]);
+		if (_a == ACTION_START || _a == ACTION_STOP	)
+		{
+			action = _a;
+			continue;
+		}
 
-			action_t _a = find_Action(tokens[i]);
-			if (_a != ACTION_NONE)
-			{
-				action = _a;
-				continue;
-			}
+		int32_t _d;
 
-			int32_t _d;
-
-			if ( ToInt32(tokens[i], &_d) != 0 )
-			{
-				if(_d >= MIN_DELTA_DISTANCE_METERS)
-					delta_dist = _d;
-				else
-					delta_dist = MIN_DELTA_DISTANCE_METERS;
-			}
+		if ( ToInt32(tokens[i], &_d) != 0 )
+		{
+			if(_d >= MIN_DELTA_DISTANCE_METERS)
+				delta_dist = _d;
+			else
+				delta_dist = MIN_DELTA_DISTANCE_METERS;
 		}
 	}
-
+	
 	if (action == ACTION_STOP)
 	{
 			printf("{%s} Stopping %s to %s\n", GetPortName(port), tokens[0], GetPortName(delta_dist_target) );
@@ -1190,11 +1240,14 @@ char *delta_dist_report_cmd(char** tokens, int cnt, _ports_t port)
 	}
 	else
 	{
-		RegisterVelocityReport(report_frequency, 
+		if (!RegisterVelocityReport(report_frequency, 
 			SysConfig.speed_cutoff, 
 			SysConfig.vel_smoth_factor, 
 			SysConfig.accel_smoth_factor,
-			 distance_report_callback );
+			 distance_report_callback ) )
+		{
+			return PrintCmdError("Failed registering velocity report\n");
+		}
 	}
 
 return PrintCmdOK();

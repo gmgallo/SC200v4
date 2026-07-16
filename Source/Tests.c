@@ -690,12 +690,13 @@ bool distance_report_process(pvelocity_rep_t vel)
 	}
 
 	double period = vel->WeekSeconds - last_update_time; // period in seconds
-	last_update_time = vel->WeekSeconds;
 
 	if (period <= 0.0 || trigger_dist <= 0.0)
 	{
 		return false; // Invalid period, skip this report
 	}
+
+	last_update_time = vel->WeekSeconds;
 
 	// Update the distance travelled based on the current speed and acceleration
 	double travel = DistanceTravelled(vel->HorSpeed, vel->HorAccel, period); // period in seconds
@@ -759,8 +760,6 @@ static inline double frand(double min, double max)
 
 char* BenchmarkTimeToDistance(char**tokens,int cnt, _ports_t port)
 {
-	char buf[100];
-
 	delta_dist_target = port;
 	distance_travelled = 0.0;
  	last_update_time= 0.0;
@@ -841,8 +840,6 @@ char* BenchmarkTimeToDistance(char**tokens,int cnt, _ports_t port)
 /*---------------------------------------------------------------------------------------------- STOPWATCH BENCHMARK */
 char* BenchmarkStopWatch(char**tokens,int cnt, _ports_t port)
 {
-	char buf[100];
-
 	if (cnt < 3)
 		return PrintCmdError("Usage: BENCHMARK 5 <milliseconds>\n");
 

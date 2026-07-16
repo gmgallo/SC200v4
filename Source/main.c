@@ -269,7 +269,7 @@ void MonitorConsoleInput()
 
 			if ( retval != NULL && TEST_BITS(Cmd_Echo_On,true))
 			{
-				printf(retval);
+				printf("%s", retval);
 			}
 			monIndex = 0;
 		}
@@ -406,7 +406,7 @@ void Init_WDT()
 }
 //#define MONITOR_IMU_LOG
 //#define MONITOR_GNSS_LOG
- 
+  
 /*===============================================================  Main() */
 int main(void)
 {
@@ -607,7 +607,7 @@ int main(void)
         		{
 					Uart_COM_Send(R->Dbuf.Buffer, R->Dbuf.Count);
         		}
-        		else if (R->Port == USB_COM1)
+				else if (R->Port == USB_COM1)
 				{
 					Send_USB_CDC_Data(USBUART_COM1, R->Dbuf.Buffer, R->Dbuf.Count);
 				}

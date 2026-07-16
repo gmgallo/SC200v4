@@ -776,7 +776,7 @@ typedef struct _st_velocity_rep
 
 typedef void(*pnotify_velocity)(pvelocity_rep_t vel);
 
-void RegisterVelocityReport(double freq, double cutoff, double alpha, double beta, pnotify_velocity callback );
+bool RegisterVelocityReport(double freq, double cutoff, double alpha, double beta, pnotify_velocity callback );
 void CancelVelocityReport();
 	
 /*------------------------------------------------------------------------------
